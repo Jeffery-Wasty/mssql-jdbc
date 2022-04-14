@@ -4565,7 +4565,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
             // For protocol = HGS,AAS, at this point it can only have a valid URL, therefore is V2
             // For protocol = NONE, it is V2 regardless
             // For protocol = null or empty, we always want V1
-            if (null == enclaveAttestationProtocol || enclaveAttestationProtocol.isEmpty()) {
+            if (null == enclaveAttestationProtocol) {
                 tdsWriter.writeByte(TDS.COLUMNENCRYPTION_VERSION1);
             } else {
                 tdsWriter.writeByte(TDS.COLUMNENCRYPTION_VERSION2);
