@@ -693,7 +693,12 @@ enum SQLServerDriverBooleanProperty {
     USE_BULK_COPY_FOR_BATCH_INSERT("useBulkCopyForBatchInsert", false),
     USE_FMT_ONLY("useFmtOnly", false),
     SEND_TEMPORAL_DATATYPES_AS_STRING_FOR_BULK_COPY("sendTemporalDataTypesAsStringForBulkCopy", true),
-    DELAY_LOADING_LOBS("delayLoadingLobs", true);
+    DELAY_LOADING_LOBS("delayLoadingLobs", true),
+    IGNORE_OFFSET_ON_DATE_TIME_OFFSET_CONVERSION("ignoreOffsetOnDateTimeOffsetConversion", false),
+    USE_DEFAULT_JAAS_CONFIG("useDefaultJaasConfig", false),
+    USE_DEFAULT_GSS_CREDENTIAL("useDefaultGSSCredential", false),
+    USE_FLEXIBLE_CALLABLE_STATEMENTS("useFlexibleCallableStatements", true),
+    CALC_BIG_DECIMAL_SCALE("calcBigDecimalScale", false);
 
     private final String name;
     private final boolean defaultValue;
@@ -747,7 +752,7 @@ public final class SQLServerDriver implements java.sql.Driver {
                     SQLServerDriverStringProperty.DATABASE_NAME.getDefaultValue(), false, null),
             new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.DISABLE_STATEMENT_POOLING.toString(),
                     Boolean.toString(SQLServerDriverBooleanProperty.DISABLE_STATEMENT_POOLING.getDefaultValue()), false,
-                    new String[] {"true", "false"}),
+                    TRUE_FALSE),
             new SQLServerDriverPropertyInfo(SQLServerDriverStringProperty.ENCRYPT.toString(),
                     SQLServerDriverStringProperty.ENCRYPT.getDefaultValue(), false,
                     new String[] {EncryptOption.FALSE.toString(), EncryptOption.NO.toString(),
@@ -766,6 +771,12 @@ public final class SQLServerDriver implements java.sql.Driver {
                     SQLServerDriverStringProperty.INSTANCE_NAME.getDefaultValue(), false, null),
             new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.INTEGRATED_SECURITY.toString(),
                     Boolean.toString(SQLServerDriverBooleanProperty.INTEGRATED_SECURITY.getDefaultValue()), false,
+                    TRUE_FALSE),
+            new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.toString(),
+                    Boolean.toString(SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.getDefaultValue()), false,
+                    TRUE_FALSE),
+            new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.toString(),
+                    Boolean.toString(SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.getDefaultValue()), false,
                     TRUE_FALSE),
             new SQLServerDriverPropertyInfo(SQLServerDriverStringProperty.KEY_STORE_AUTHENTICATION.toString(),
                     SQLServerDriverStringProperty.KEY_STORE_AUTHENTICATION.getDefaultValue(), false,
@@ -892,6 +903,12 @@ public final class SQLServerDriver implements java.sql.Driver {
                     null),
             new SQLServerDriverPropertyInfo(SQLServerDriverStringProperty.JAAS_CONFIG_NAME.toString(),
                     SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue(), false, null),
+            new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                    Boolean.toString(SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.getDefaultValue()), false,
+                    TRUE_FALSE),
+            new SQLServerDriverPropertyInfo(SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_SCALE.toString(),
+                    Boolean.toString(SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_SCALE.getDefaultValue()), false,
+                    TRUE_FALSE),
             new SQLServerDriverPropertyInfo(SQLServerDriverStringProperty.SSL_PROTOCOL.toString(),
                     SQLServerDriverStringProperty.SSL_PROTOCOL.getDefaultValue(), false,
                     new String[] {SSLProtocol.TLS.toString(), SSLProtocol.TLS_V10.toString(),

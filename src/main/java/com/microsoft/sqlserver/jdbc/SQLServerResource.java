@@ -144,6 +144,8 @@ public final class SQLServerResource extends ListResourceBundle {
         {"R_stringNotInHex", "The string is not in a valid hex format."},
         {"R_unknownType", "The Java type {0} is not a supported type."},
         {"R_physicalConnectionIsClosed", "The physical connection is closed for this pooled connection."},
+        {"R_noNamedAndIndexedParameters", "Detected uncompliant use of both named and indexed parameters while 'useFlexibleCallableStatements=false'. It is suggested to either exclusively use named parameters or indexed parameters."},
+        {"R_unknownOutputParameter", "Cannot acquire output parameter value by name. No parameter index was associated with the output parameter name. If acquiring output parameter by name, verify that the output parameter was initially registered by name."},
         {"R_invalidDataSourceReference", "Invalid DataSource reference."},
         {"R_cantGetColumnValueFromDeletedRow", "Cannot get a value from a deleted row."},
         {"R_cantGetUpdatedColumnValue", "Updated columns cannot be accessed until updateRow() or cancelRowUpdates() has been called."},
@@ -197,6 +199,8 @@ public final class SQLServerResource extends ListResourceBundle {
         {"R_lastUpdateCountPropertyDescription", "Ensures that only the last update count is returned from an SQL statement passed to the server."},
         {"R_disableStatementPoolingPropertyDescription", "Disables the statement pooling feature."},
         {"R_integratedSecurityPropertyDescription", "Indicates whether Windows authentication will be used to connect to SQL Server."},
+        {"R_useDefaultGSSCredentialPropertyDescription", "Indicates whether GSSCredential will be created using native GSS-API."},
+        {"R_useFlexibleCallableStatementsPropertyDescription", "Indicates whether sp_sproc_columns will be used for parameter name lookup when setting or registering parameters for callable statements."},
         {"R_authenticationSchemePropertyDescription", "The authentication scheme to be used for integrated authentication."},
         {"R_lockTimeoutPropertyDescription", "The number of milliseconds to wait before the database reports a lock time-out."},
         {"R_connectRetryCountPropertyDescription", "The number of reconnection attempts if there is a connection failure."},
@@ -451,7 +455,8 @@ public final class SQLServerResource extends ListResourceBundle {
         {"R_kerberosLoginFailedForUsername", "Cannot login with Kerberos principal {0}, check your credentials. {1}"},
         {"R_kerberosLoginFailed", "Kerberos Login failed: {0} due to {1} ({2})"},
         {"R_StoredProcedureNotFound", "Could not find stored procedure ''{0}''."},
-        {"R_jaasConfigurationNamePropertyDescription", "Login configuration file for Kerberos authentication."},
+        {"R_jaasConfigurationNamePropertyDescription", "Login configuration name for Kerberos authentication."},
+        {"R_useDefaultJaasConfigPropertyDescription", "Use the default JAAS configuration for Kerberos authentication."},
         {"R_AKVKeyNotFound", "Key not found: {0}"},
         {"R_SQLVariantSupport", "SQL_VARIANT is not supported in versions of SQL Server before 2008."},
         {"R_invalidProbbytes", "SQL_VARIANT: invalid probBytes for {0} type."},
@@ -513,6 +518,7 @@ public final class SQLServerResource extends ListResourceBundle {
         {"R_unassignableError", "The class specified by the {0} property must be assignable to {1}."},
         {"R_InvalidCSVQuotes", "Failed to parse the CSV file, verify that the fields are correctly enclosed in double quotes."},
         {"R_TokenRequireUrl", "Token credentials require a URL using the HTTPS protocol scheme."},
+        {"R_calcBigDecimalScalePropertyDescription", "Indicates whether the driver should calculate scale for big decimal values."},
         {"R_maxResultBufferPropertyDescription", "Determines maximum amount of bytes that can be read during retrieval of result set"},
         {"R_maxResultBufferInvalidSyntax", "Invalid syntax: {0} in maxResultBuffer parameter."},
         {"R_maxResultBufferNegativeParameterValue", "MaxResultBuffer must have positive value: {0}."},
@@ -538,7 +544,8 @@ public final class SQLServerResource extends ListResourceBundle {
         {"R_serverError", "An error occurred during the current command (Done status {0}). {1}"},
         {"R_ManagedIdentityTokenAcquisitionFail", "Failed to acquire managed identity token. Request for the token succeeded, but no token was returned. The token is null."},
         {"R_AmbiguousRowUpdate", "Failed to execute updateRow(). The update is attempting an ambiguous update on tables \"{0}\" and \"{1}\". Ensure all columns being updated prior to the updateRow() call belong to the same table."},
-        {"R_InvalidSqlQuery", "Invalid SQL Query: {0}"}
+        {"R_InvalidSqlQuery", "Invalid SQL Query: {0}"},
+        {"R_InvalidScale", "Scale of input value is larger than the maximum allowed by SQL Server."}
     };
 }
 // @formatter:on

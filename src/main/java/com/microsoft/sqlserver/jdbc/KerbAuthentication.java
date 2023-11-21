@@ -39,6 +39,7 @@ final class KerbAuthentication extends SSPIAuthentication {
     private LoginContext lc = null;
     private boolean isUserCreatedCredential = false;
     private GSSCredential peerCredentials = null;
+    private boolean useDefaultNativeGSSCredential = false;
     private GSSContext peerContext = null;
 
     static {
@@ -63,6 +64,10 @@ final class KerbAuthentication extends SSPIAuthentication {
             // as it is.
             GSSName remotePeerName = manager.createName(spn, null);
 
+            if (useDefaultNativeGSSCredential) {
+                peerCredentials = manager.createCredential(null, GSSCredential.DEFAULT_LIFETIME, kerberos, GSSCredential.INITIATE_ONLY);
+            }
+
             if (null != peerCredentials) {
                 peerContext = manager.createContext(remotePeerName, kerberos, peerCredentials,
                         GSSContext.DEFAULT_LIFETIME);
@@ -73,13 +78,31 @@ final class KerbAuthentication extends SSPIAuthentication {
                 String configName = con.activeConnectionProperties.getProperty(
                         SQLServerDriverStringProperty.JAAS_CONFIG_NAME.toString(),
                         SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue());
+                boolean useDefaultJaas = Boolean.parseBoolean(con.activeConnectionProperties.getProperty(
+                        SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                        Boolean.toString(SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.getDefaultValue())));
+
+                if (!configName.equals(
+                        SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue()) && useDefaultJaas) {
+                    // Reset configName to default -- useDefaultJaas setting takes priority over jaasConfigName
+                    if (authLogger.isLoggable(Level.WARNING)) {
+                        authLogger.warning(toString() + String.format(
+                                "Using default JAAS configuration, configured %s=%s will not be used.",
+                                SQLServerDriverStringProperty.JAAS_CONFIG_NAME, configName));
+                    }
+                    configName = SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue();
+                }
                 Subject currentSubject;
                 KerbCallback callback = new KerbCallback(con);
                 try {
                     AccessControlContext context = AccessController.getContext();
                     currentSubject = Subject.getSubject(context);
                     if (null == currentSubject) {
-                        lc = new LoginContext(configName, callback);
+                        if (useDefaultJaas) {
+                            lc = new LoginContext(configName, null, callback, new JaasConfiguration(null));
+                        } else {
+                            lc = new LoginContext(configName, callback);
+                        }
                         lc.login();
                         // per documentation LoginContext will instantiate a new subject.
                         currentSubject = lc.getSubject();
@@ -202,10 +225,11 @@ final class KerbAuthentication extends SSPIAuthentication {
      * @param impersonatedUserCred
      */
     KerbAuthentication(SQLServerConnection con, String address, int port, GSSCredential impersonatedUserCred,
-            boolean isUserCreated) {
+            boolean isUserCreated, boolean useDefaultNativeGSSCredential) {
         this(con, address, port);
         this.peerCredentials = impersonatedUserCred;
         this.isUserCreatedCredential = isUserCreated;
+        this.useDefaultNativeGSSCredential = useDefaultNativeGSSCredential;
     }
 
     byte[] generateClientContext(byte[] pin, boolean[] done) throws SQLServerException {
@@ -217,9 +241,9 @@ final class KerbAuthentication extends SSPIAuthentication {
 
     void releaseClientContext() {
         try {
-            if (null != peerCredentials && !isUserCreatedCredential) {
+            if (null != peerCredentials && !isUserCreatedCredential && !useDefaultNativeGSSCredential) {
                 peerCredentials.dispose();
-            } else if (null != peerCredentials && isUserCreatedCredential) {
+            } else if (null != peerCredentials && (isUserCreatedCredential || useDefaultNativeGSSCredential)) {
                 peerCredentials = null;
             }
             if (null != peerContext) {

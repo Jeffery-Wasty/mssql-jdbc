@@ -240,6 +240,28 @@ public class SQLServerDataSource
     }
 
     @Override
+    public void setUseDefaultGSSCredential(boolean enable) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.toString(), enable);
+    }
+
+    @Override
+    public boolean getUseDefaultGSSCredential() {
+       return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.toString(),
+               SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.getDefaultValue());
+    }
+
+    @Override
+    public void setUseFlexibleCallableStatements(boolean enable) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.toString(), enable);
+    }
+
+    @Override
+    public boolean getUseFlexibleCallableStatements() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.toString(),
+                SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.getDefaultValue());
+    }
+
+    @Override
     public void setAccessToken(String accessToken) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.ACCESS_TOKEN.toString(), accessToken);
     }
@@ -1030,6 +1052,18 @@ public class SQLServerDataSource
                 SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue());
     }
 
+    @Override
+    public boolean getUseDefaultJaasConfig() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.getDefaultValue());
+    }
+
+    @Override
+    public void setUseDefaultJaasConfig(boolean useDefaultJaasConfig) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                useDefaultJaasConfig);
+    }
+
     /**
      * @deprecated This method is deprecated. Use {@link SQLServerDataSource#setUser(String user)} instead.
      *
@@ -1301,6 +1335,29 @@ public class SQLServerDataSource
     public String getAccessTokenCallbackClass() {
         return getStringProperty(connectionProps, SQLServerDriverStringProperty.ACCESS_TOKEN_CALLBACK_CLASS.toString(),
                 null);
+    }
+
+    /**
+     * Sets the 'calcBigDecimalScale' setting.
+     *
+     * @param calcBigDecimalScale
+     *         boolean property to have the driver calculate a big decimal's scale from input
+     */
+    @Override
+    public void setCalcBigDecimalScale(boolean calcBigDecimalScale) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_SCALE.toString(),
+                calcBigDecimalScale);
+    }
+
+    /**
+     * Returns the value for 'calcBigDecimalScale'.
+     *
+     * @return computeBigDecimal boolean value
+     */
+    @Override
+    public boolean getCalcBigDecimalScale() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_SCALE.toString(),
+                SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_SCALE.getDefaultValue());
     }
 
     /**

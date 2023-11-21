@@ -595,8 +595,42 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     String getServerSpn();
 
     /**
+     * Sets the value to indicate whether useDefaultGSSCredential is enabled.
+     *
+     * @param enable
+     *        true if useDefaultGSSCredential is enabled. Otherwise, false.
+     */
+    void setUseDefaultGSSCredential(boolean enable);
+
+    /**
+     * Returns the useDefaultGSSCredential.
+     *
+     * @return if enabled, return true. Otherwise, false.
+     */
+    boolean getUseDefaultGSSCredential();
+
+    /**
+     * Sets whether or not sp_sproc_columns will be used for parameter name lookup.
+     *
+     * @param useFlexibleCallableStatements
+     *        When set to false, sp_sproc_columns is not used for parameter name lookup
+     *        in callable statements. This eliminates a round trip to the server but imposes limitations
+     *        on how parameters are set. When set to false, applications must either reference
+     *        parameters by name or by index, not both. Parameters must also be set in the same
+     *        order as the stored procedure definition.
+     */
+    void setUseFlexibleCallableStatements(boolean useFlexibleCallableStatements);
+
+    /**
+     * Returns whether or not sp_sproc_columns is being used for parameter name lookup.
+     *
+     * @return useFlexibleCallableStatements
+     */
+    boolean getUseFlexibleCallableStatements();
+
+    /**
      * Sets the GSSCredential.
-     * 
+     *
      * @param userCredential
      *        the credential
      */
@@ -604,7 +638,7 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
 
     /**
      * Returns the GSSCredential.
-     * 
+     *
      * @return GSSCredential
      */
     GSSCredential getGSSCredentials();
@@ -802,7 +836,7 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     int getSocketTimeout();
 
     /**
-     * Sets the login configuration file for Kerberos authentication. This overrides the default configuration <i>
+     * Sets the login configuration name for Kerberos authentication. This overrides the default configuration <i>
      * SQLJDBCDriver </i>
      * 
      * @param configurationName
@@ -814,7 +848,7 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     void setJASSConfigurationName(String configurationName);
 
     /**
-     * Returns the login configuration file for Kerberos authentication.
+     * Returns the login configuration name for Kerberos authentication.
      *
      * 
      * @return login configuration file name
@@ -825,7 +859,7 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     String getJASSConfigurationName();
 
     /**
-     * Sets the login configuration file for Kerberos authentication. This overrides the default configuration <i>
+     * Sets the login configuration name for Kerberos authentication. This overrides the default configuration <i>
      * SQLJDBCDriver </i>
      * 
      * 
@@ -835,12 +869,27 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     void setJAASConfigurationName(String configurationName);
 
     /**
-     * Returns the login configuration file for Kerberos authentication.
+     * Returns the login configuration name for Kerberos authentication.
      * 
-     * @return login configuration file name
+     * @return login configuration name
      */
     String getJAASConfigurationName();
 
+    /**
+     * Returns whether the default JAAS Configuration should be used
+     *
+     * @return useDefaultJaasConfig boolean value
+     */
+    boolean getUseDefaultJaasConfig();
+
+    /**
+     * Sets whether the default JAAS Configuration will be used.  This means the system-wide JAAS configuration
+     * is ignored to avoid conflicts with libraries that override the JAAS configuration.
+     *
+     * @param useDefaultJaasConfig
+     *         boolean property to use the default JAAS configuration
+     */
+    void setUseDefaultJaasConfig(boolean useDefaultJaasConfig);
     /**
      * Sets whether Fips Mode should be enabled/disabled on the connection. For FIPS enabled JVM this property should be
      * true.
@@ -1283,4 +1332,19 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
      * @param accessTokenCallbackClass
      */
     void setAccessTokenCallbackClass(String accessTokenCallbackClass);
+
+    /**
+     * Returns value of 'calcBigDecimalScale' from Connection String.
+     *
+     * @param calcBigDecimalScale
+     *         indicates whether the driver should attempt to calculate scale from inputted big decimal values
+     */
+    void setCalcBigDecimalScale(boolean calcBigDecimalScale);
+
+    /**
+     * Sets the value for 'calcBigDecimalScale' property
+     *
+     * @return calcBigDecimalScale boolean value
+     */
+    boolean getCalcBigDecimalScale();
 }

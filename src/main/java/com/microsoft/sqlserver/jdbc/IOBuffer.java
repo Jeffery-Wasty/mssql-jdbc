@@ -40,6 +40,7 @@ import java.security.Security;
 import java.sql.Timestamp;
 import java.text.MessageFormat;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.util.ArrayList;
@@ -465,6 +466,7 @@ final class TDS {
     final static int COLINFO_STATUS_DIFFERENT_NAME = 0x20;
 
     final static int MAX_FRACTIONAL_SECONDS_SCALE = 7;
+    final static int DEFAULT_FRACTIONAL_SECONDS_SCALE = 3;
 
     final static Timestamp MAX_TIMESTAMP = Timestamp.valueOf("2079-06-06 23:59:59");
     final static Timestamp MIN_TIMESTAMP = Timestamp.valueOf("1900-01-01 00:00:00");
@@ -725,8 +727,7 @@ final class TDSChannel implements Serializable {
             setSocketOptions(tcpSocket, this);
 
             // set SO_TIMEOUT
-            int socketTimeout = con.getSocketTimeoutMilliseconds();
-            tcpSocket.setSoTimeout(socketTimeout);
+            tcpSocket.setSoTimeout(con.getSocketTimeoutMilliseconds());
 
             inputStream = tcpInputStream = new ProxyInputStream(tcpSocket.getInputStream());
             outputStream = tcpOutputStream = tcpSocket.getOutputStream();
@@ -1812,7 +1813,9 @@ final class TDSChannel implements Serializable {
             if (logger.isLoggable(Level.FINEST))
                 logger.finest(toString() + " Initializing SSL context");
 
-            sslContext.init(km, tm, null);
+            sslContext.init(km, tm, null); // CodeQL [SM03853] Potential all-accepting TrustManager is by design
+            // Permissive trust manager allows minimum encryption of credentials even when trusted certificates
+            // aren't provisioned on the server.
 
             // Got the SSL context. Now create an SSL socket over our own proxy socket
             // which we can toggle between TDS-encapsulated and raw communications.
@@ -3755,29 +3758,24 @@ final class TDSWriter {
         writeShort((short) minutesSinceMidnight);
     }
 
-    void writeDatetime(String value) throws SQLServerException {
-        GregorianCalendar calendar = initializeCalender(TimeZone.getDefault());
-        long utcMillis; // Value to which the calendar is to be set (in milliseconds 1/1/1970 00:00:00 GMT)
+    void writeDatetime(java.sql.Timestamp dateValue) throws SQLServerException {
+        LocalDateTime ldt = dateValue.toLocalDateTime();
         int subSecondNanos;
-        java.sql.Timestamp timestampValue = java.sql.Timestamp.valueOf(value);
-        utcMillis = timestampValue.getTime();
-        subSecondNanos = timestampValue.getNanos();
+        subSecondNanos = ldt.getNano();
 
-        // Load the calendar with the desired value
-        calendar.setTimeInMillis(utcMillis);
 
         // Number of days there have been since the SQL Base Date.
         // These are based on SQL Server algorithms
-        int daysSinceSQLBaseDate = DDC.daysSinceBaseDate(calendar.get(Calendar.YEAR),
-                calendar.get(Calendar.DAY_OF_YEAR), TDS.BASE_YEAR_1900);
+        int daysSinceSQLBaseDate = DDC.daysSinceBaseDate(ldt.getYear(),
+                ldt.getDayOfYear(), TDS.BASE_YEAR_1900);
 
         // Number of milliseconds since midnight of the current day.
         int millisSinceMidnight = (subSecondNanos + Nanos.PER_MILLISECOND / 2) / Nanos.PER_MILLISECOND + // Millis into
-                                                                                                         // the current
-                                                                                                         // second
-                1000 * calendar.get(Calendar.SECOND) + // Seconds into the current minute
-                60 * 1000 * calendar.get(Calendar.MINUTE) + // Minutes into the current hour
-                60 * 60 * 1000 * calendar.get(Calendar.HOUR_OF_DAY); // Hours into the current day
+                // the current
+                // second
+                1000 * ldt.getSecond() + // Seconds into the current minute
+                60 * 1000 * ldt.getMinute() + // Minutes into the current hour
+                60 * 60 * 1000 * ldt.getHour(); // Hours into the current day
 
         // The last millisecond of the current day is always rounded to the first millisecond
         // of the next day because DATETIME is only accurate to 1/300th of a second.
@@ -4791,7 +4789,7 @@ final class TDSWriter {
      * Utility for internal writeRPCString calls
      */
     void writeRPCStringUnicode(String sValue) throws SQLServerException {
-        writeRPCStringUnicode(null, sValue, false, null);
+        writeRPCStringUnicode(null, sValue, false, null, false);
     }
 
     /**
@@ -4806,8 +4804,8 @@ final class TDSWriter {
      * @param collation
      *        the collation of the data value
      */
-    void writeRPCStringUnicode(String sName, String sValue, boolean bOut,
-            SQLCollation collation) throws SQLServerException {
+    void writeRPCStringUnicode(String sName, String sValue, boolean bOut, SQLCollation collation,
+            boolean isNonPLP) throws SQLServerException {
         boolean bValueNull = (sValue == null);
         int nValueLen = bValueNull ? 0 : (2 * sValue.length());
         // Textual RPC requires a collation. If none is provided, as is the case when
@@ -4819,10 +4817,9 @@ final class TDSWriter {
          * Use PLP encoding if either OUT params were specified or if the user query exceeds
          * DataTypes.SHORT_VARTYPE_MAX_BYTES
          */
-        if (nValueLen > DataTypes.SHORT_VARTYPE_MAX_BYTES || bOut) {
+        if ((nValueLen > DataTypes.SHORT_VARTYPE_MAX_BYTES || bOut) && !isNonPLP) {
             writeRPCNameValType(sName, bOut, TDSType.NVARCHAR);
 
-            // Handle Yukon v*max type header here.
             writeVMaxHeader(nValueLen, // Length
                     bValueNull, // Is null?
                     collation);
@@ -5032,7 +5029,8 @@ final class TDSWriter {
     }
 
     private void writeInternalTVPRowValues(JDBCType jdbcType, String currentColumnStringValue, Object currentObject,
-            Map.Entry<Integer, SQLServerMetaData> columnPair, boolean isSqlVariant) throws SQLServerException {
+            Map.Entry<Integer, SQLServerMetaData> columnPair, boolean isSqlVariant)
+                    throws SQLServerException, IllegalArgumentException {
         boolean isShortValue, isNull;
         int dataLength;
         switch (jdbcType) {
@@ -5104,9 +5102,18 @@ final class TDSWriter {
 
                     /*
                      * setScale of all BigDecimal value based on metadata as scale is not sent separately for individual
-                     * value. Use the rounding used in Server. Say, for BigDecimal("0.1"), if scale in metdadata is 0,
+                     * value. Use the rounding used in Server. Say, for BigDecimal("0.1"), if scale in metadata is 0,
                      * then ArithmeticException would be thrown if RoundingMode is not set
+                     *
+                     * Additionally, we should check here if the scale is within the bounds of SQLServer as it is
+                     * possible for a number with a scale larger than 38 to be passed in.
                      */
+                    if (columnPair.getValue().scale > SQLServerConnection.MAX_DECIMAL_PRECISION) {
+                        MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_InvalidScale"));
+                        Object[] msgArgs = {columnPair.getValue().scale};
+                        throw new IllegalArgumentException(form.format(msgArgs));
+                    }
+
                     bdValue = bdValue.setScale(columnPair.getValue().scale, RoundingMode.HALF_UP);
 
                     byte[] val = DDC.convertBigDecimalToBytes(bdValue, bdValue.scale());
@@ -5411,7 +5418,6 @@ final class TDSWriter {
                     // Use PLP encoding on Yukon and later with long values
                     if (!isShortValue) // PLP
                     {
-                        // Handle Yukon v*max type header here.
                         writeShort((short) 0xFFFF);
                         con.getDatabaseCollation().writeCollation(this);
                     } else // non PLP
@@ -5429,7 +5435,6 @@ final class TDSWriter {
                     isShortValue = pair.getValue().precision <= DataTypes.SHORT_VARTYPE_MAX_BYTES;
                     // Use PLP encoding on Yukon and later with long values
                     if (!isShortValue) // PLP
-                        // Handle Yukon v*max type header here.
                         writeShort((short) 0xFFFF);
                     else // non PLP
                         writeShort((short) DataTypes.SHORT_VARTYPE_MAX_BYTES);
@@ -5564,8 +5569,8 @@ final class TDSWriter {
         writeByte(cryptoMeta.normalizationRuleVersion);
     }
 
-    void writeRPCByteArray(String sName, byte[] bValue, boolean bOut, JDBCType jdbcType,
-            SQLCollation collation) throws SQLServerException {
+    void writeRPCByteArray(String sName, byte[] bValue, boolean bOut, JDBCType jdbcType, SQLCollation collation,
+            boolean isNonPLP) throws SQLServerException {
         boolean bValueNull = (bValue == null);
         int nValueLen = bValueNull ? 0 : bValue.length;
         boolean isShortValue = (nValueLen <= DataTypes.SHORT_VARTYPE_MAX_BYTES);
@@ -5611,8 +5616,7 @@ final class TDSWriter {
 
         writeRPCNameValType(sName, bOut, tdsType);
 
-        if (usePLP) {
-            // Handle Yukon v*max type header here.
+        if (usePLP && !isNonPLP) {
             writeVMaxHeader(nValueLen, bValueNull, collation);
 
             // Send the data.
@@ -6393,7 +6397,6 @@ final class TDSWriter {
 
             writeRPCNameValType(sName, bOut, jdbcType.isTextual() ? TDSType.BIGVARCHAR : TDSType.BIGVARBINARY);
 
-            // Handle Yukon v*max type header here.
             writeVMaxHeader(streamLength, false, jdbcType.isTextual() ? collation : null);
         }
 
@@ -6533,7 +6536,6 @@ final class TDSWriter {
 
             writeRPCNameValType(sName, bOut, TDSType.NVARCHAR);
 
-            // Handle Yukon v*max type header here.
             writeVMaxHeader(
                     (DataTypes.UNKNOWN_STREAM_LENGTH == reLength) ? DataTypes.UNKNOWN_STREAM_LENGTH : 2 * reLength, // Length
                                                                                                                     // (in
@@ -6988,6 +6990,35 @@ final class TDSReader implements Serializable {
         return 0;
     }
 
+    final int peekReturnValueStatus() throws SQLServerException {
+        // Ensure that we have a packet to read from.
+        if (!ensurePayload()) {
+            throwInvalidTDS();
+        }
+
+        // In order to parse the 'status' value, we need to skip over the following properties in the TDS packet
+        // payload: TDS token type (1 byte value), ordinal/length (2 byte value), parameter name length value (1 byte value) and
+        // the number of bytes that make the parameter name (need to be calculated).
+        //
+        // 'offset' starts at 4 because tdsTokenType + ordinal/length + parameter name length value is 4 bytes. So, we
+        // skip 4 bytes immediateley.
+        int offset = 4;
+        int paramNameLength = currentPacket.payload[payloadOffset + 3];
+
+        // Check if parameter name is set. If it's set, it should be > 0. In which case, we add the
+        // additional bytes to skip.
+        if (paramNameLength > 0) {
+            // Each character in unicode is 2 bytes
+            offset += 2 * paramNameLength;
+        }
+
+        if (payloadOffset + offset <= currentPacket.payloadLength) {
+            return currentPacket.payload[payloadOffset + offset] & 0xFF;
+        }
+
+        return -1;
+    }
+
     final int readUnsignedByte() throws SQLServerException {
         // Ensure that we have a packet to read from.
         if (!ensurePayload())
@@ -7229,7 +7260,7 @@ final class TDSReader implements Serializable {
         }
 
         // Convert the DATETIME/SMALLDATETIME value to the desired Java type.
-        return DDC.convertTemporalToObject(jdbcType, SSType.DATETIME, appTimeZoneCalendar, daysSinceSQLBaseDate,
+        return DDC.convertTemporalToObject(con, jdbcType, SSType.DATETIME, appTimeZoneCalendar, daysSinceSQLBaseDate,
                 msecSinceMidnight, 0); // scale
                                        // (ignored
                                        // for
@@ -7246,7 +7277,7 @@ final class TDSReader implements Serializable {
         int localDaysIntoCE = readDaysIntoCE();
 
         // Convert the DATE value to the desired Java type.
-        return DDC.convertTemporalToObject(jdbcType, SSType.DATE, appTimeZoneCalendar, localDaysIntoCE, 0, // midnight
+        return DDC.convertTemporalToObject(con, jdbcType, SSType.DATE, appTimeZoneCalendar, localDaysIntoCE, 0, // midnight
                                                                                                            // local to
                                                                                                            // app time
                                                                                                            // zone
@@ -7262,7 +7293,7 @@ final class TDSReader implements Serializable {
         long localNanosSinceMidnight = readNanosSinceMidnight(typeInfo.getScale());
 
         // Convert the TIME value to the desired Java type.
-        return DDC.convertTemporalToObject(jdbcType, SSType.TIME, appTimeZoneCalendar, 0, localNanosSinceMidnight,
+        return DDC.convertTemporalToObject(con, jdbcType, SSType.TIME, appTimeZoneCalendar, 0, localNanosSinceMidnight,
                 typeInfo.getScale());
     }
 
@@ -7276,7 +7307,7 @@ final class TDSReader implements Serializable {
         int localDaysIntoCE = readDaysIntoCE();
 
         // Convert the DATETIME2 value to the desired Java type.
-        return DDC.convertTemporalToObject(jdbcType, SSType.DATETIME2, appTimeZoneCalendar, localDaysIntoCE,
+        return DDC.convertTemporalToObject(con, jdbcType, SSType.DATETIME2, appTimeZoneCalendar, localDaysIntoCE,
                 localNanosSinceMidnight, typeInfo.getScale());
     }
 
@@ -7291,7 +7322,7 @@ final class TDSReader implements Serializable {
         int localMinutesOffset = readShort();
 
         // Convert the DATETIMEOFFSET value to the desired Java type.
-        return DDC.convertTemporalToObject(jdbcType, SSType.DATETIMEOFFSET,
+        return DDC.convertTemporalToObject(con, jdbcType, SSType.DATETIMEOFFSET,
                 new GregorianCalendar(new SimpleTimeZone(localMinutesOffset * 60 * 1000, ""), Locale.US), utcDaysIntoCE,
                 utcNanosSinceMidnight, typeInfo.getScale());
     }
