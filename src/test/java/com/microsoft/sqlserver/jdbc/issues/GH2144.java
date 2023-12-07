@@ -2,11 +2,13 @@ package com.microsoft.sqlserver.jdbc.issues;
 
 import java.sql.*;
 import java.util.*;
-
+/**
+ * Test sendStringParamsAsUnicode with test from user and from me.
+ * See <a href="https://github.com/microsoft/mssql-jdbc/issues/2144">GitHub Issue #2144</a>.
+ */
 public class GH2144 {
     /**
      * Test sendStringParamsAsUnicode with test from user.
-     * See <a href="https://github.com/microsoft/mssql-jdbc/issues/2144">GitHub Issue #2144</a>.
      */
     public static void sendStringParamsTest(String option, boolean sendStringParamsAsUnicode) throws ClassNotFoundException, SQLException {
         String runningOption;
@@ -150,7 +152,6 @@ public class GH2144 {
 
     /**
      * Test sendStringParamsAsUnicode with edited test from user.
-     * See <a href="https://github.com/microsoft/mssql-jdbc/issues/2144">GitHub Issue #2144</a>.
      */
     public static void sendStringParamsTestJeff(String option, boolean sendStringParamsAsUnicode) throws ClassNotFoundException, SQLException {
         String runningOption;

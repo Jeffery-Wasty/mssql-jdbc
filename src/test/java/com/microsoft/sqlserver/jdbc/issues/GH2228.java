@@ -2,10 +2,13 @@ package com.microsoft.sqlserver.jdbc.issues;
 
 import java.sql.*;
 
+/**
+ * Test getTableName() from ResultSetMetaData.
+ * See <a href="https://github.com/microsoft/mssql-jdbc/issues/2228">GitHub Issue #2228</a>.
+ */
 public class GH2228 {
     /**
      * Test getTableName() from ResultSetMetaData.
-     * See <a href="https://github.com/microsoft/mssql-jdbc/issues/2228">GitHub Issue #2228</a>.
      */
     public static void getTableTest() throws SQLException {
         String sql = "SELECT * FROM country";
