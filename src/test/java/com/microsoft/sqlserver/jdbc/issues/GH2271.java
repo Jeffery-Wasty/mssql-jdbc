@@ -21,8 +21,8 @@ import java.util.TimeZone;
 public class GH2271 {
 
     private static final String tableNameBulkCopyAPI = "testTable";
-    private static final String srcTable = RandomUtil.getIdentifier("BulkCopyResultSetCursorTest_SourceTable");
-    private static final String desTable = RandomUtil.getIdentifier("BulkCopyResultSetCursorTest_DestinationTable");
+    private static final String srcTable = "SourceTable";
+    private static final String desTable = "DestinationTable";
     static String connectionUrl = "jdbc:sqlserver://localhost:1433;database=TestDb;user=sa;password=TestPassword123;" +
             "encrypt=false;statementPoolingCacheSize=10;disableStatementPooling=false;enablePrepareOnFirstPreparedStatementCall=true;";
 
@@ -78,7 +78,7 @@ public class GH2271 {
             pstmt.executeBatch();
 
             if (!retainTable) {
-                dropTables(stmt);
+                dropTestTable(stmt);
             }
         }
     }
@@ -151,6 +151,9 @@ public class GH2271 {
         if (null != desTable) {
             TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(desTable), stmt);
         }
+    }
+
+    private static void dropTestTable(Statement stmt) throws SQLException {
         if (null != tableNameBulkCopyAPI) {
             TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableNameBulkCopyAPI), stmt);
         }

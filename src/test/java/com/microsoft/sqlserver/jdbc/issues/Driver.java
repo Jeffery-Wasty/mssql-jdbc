@@ -9,7 +9,7 @@ public class Driver {
         log(false, Level.FINEST);
 
         GH2271.BulkCopyForBatchInsert(true);
-        //GH2271.BulkCopy(true);
+        GH2271.BulkCopy(true);
     }
 
     private static void log(boolean on, Level lvl){
