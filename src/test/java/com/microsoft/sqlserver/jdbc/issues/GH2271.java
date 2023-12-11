@@ -33,7 +33,7 @@ public class GH2271 {
     public static void BulkCopyForBatchInsert(boolean retainTable) throws Exception {
 
         List<Timestamp> loT = new ArrayList<>();
-        Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("PST"));
+        Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         Date currentDate = new Date();
         String currentDateString = simpleDateFormat.format(currentDate);
@@ -53,10 +53,10 @@ public class GH2271 {
             String dropSql = "if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[" + tableNameBulkCopyAPI + "]') and OBJECTPROPERTY(id, N'IsUserTable') = 1) DROP TABLE [" + tableNameBulkCopyAPI + "]";
             stmt.execute(dropSql);
 
-            String createSql = "create table " + tableNameBulkCopyAPI + " (c1 int, c2 varchar(50), c3 datetime2(3) )";
+            String createSql = "create table " + tableNameBulkCopyAPI + " (c1 varchar(50), expected varchar(50), actual datetime2(3) )";
             stmt.execute(createSql);
 
-            pstmt.setInt(1, 1);
+            pstmt.setString(1, "bulkCopyForBatchInsert=false");
             pstmt.setString(2, "test"+currentDateString);
             // Time zone conversion to GMT is fine
             pstmt.setTimestamp(3, loT.get(0), gmtCal);
@@ -70,7 +70,7 @@ public class GH2271 {
              PreparedStatement pstmt = con.prepareStatement(
                      "insert into " + tableNameBulkCopyAPI+ " values (?, ?, ?)")) {
 
-            pstmt.setInt(1, 2);
+            pstmt.setString(1, "bulkCopyForBatchInsert=true");
             pstmt.setString(2, "test"+currentDateString);
             // Time zone conversion to GMT DOES NOT HAPPEN. It inserts using the given timestamp value WITHOUT converting to GMT.
             pstmt.setTimestamp(3, loT.get(0), gmtCal);
