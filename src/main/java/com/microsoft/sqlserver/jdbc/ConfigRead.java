@@ -1,9 +1,15 @@
 package com.microsoft.sqlserver.jdbc;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.URI;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedList;
 
-class ConfigRead {
+public class ConfigRead {
     // This is the "driver level retry provider" from the design doc
     // Resp for reading config file
     // Logical flow:
@@ -15,8 +21,8 @@ class ConfigRead {
     private static long timeRead;
 
     // Since changes in config should affect all connections, this is the only place we can put the list of rules.
-    HashMap<String,ConfigRetryRule> cxnRules = new HashMap<>();
-    HashMap<String,ConfigRetryRule> stmtRules = new HashMap<>();
+    private static HashMap<String,ConfigRetryRule> cxnRules = new HashMap<>();
+    private static HashMap<String,ConfigRetryRule> stmtRules = new HashMap<>();
     private ConfigRead() {
         timeRead = new Date().getTime(); // Then set the time read, maybe switch order.
         readConfig(); // This is only ran first time, so we always read config
@@ -46,8 +52,49 @@ class ConfigRead {
         // This needs to be handled here, b/c if handled in the connection object, that would mean that each connection
         // could have a different set of rules.
 
+        LinkedList<String> temp = readFromFile("config.txt");
+        System.out.println("x");
+        createRules(temp);
+
         // Read from file to
         // Parse each rule from one another
         // Create a retry rule object from each parsed rule.
+    }
+
+    private static void createRules(LinkedList<String> list) {
+        for (String temp : list) {
+            ConfigRetryRule rule = new ConfigRetryRule(temp);
+            cxnRules.put(rule.getError(),rule);
+        }
+    }
+
+    public static String getCurrentClassPath() {
+        try {
+            String className = new Object() {}.getClass().getEnclosingClass().getName();
+            String location = Class.forName(className).getProtectionDomain().getCodeSource().getLocation().getPath();
+            URI uri = new URI(location + "/");
+            return uri.getPath();
+        } catch (Exception e) {
+            //fail("Failed to get CSV file path. " + e.getMessage());
+        }
+        return null;
+    }
+
+    private static LinkedList<String> readFromFile(String inputFile) {
+        String filePath = getCurrentClassPath();
+        LinkedList<String> list = new LinkedList<>();
+        try {
+            File f = new File(filePath + inputFile);
+            try (BufferedReader buffer = new BufferedReader(new FileReader(f))) {
+                String readLine = "";
+
+                while ((readLine = buffer.readLine()) != null) {
+                    list.add(readLine);
+                }
+            }
+        } catch (IOException e) {
+            //fail(e.getMessage());
+        }
+        return list;
     }
 }
