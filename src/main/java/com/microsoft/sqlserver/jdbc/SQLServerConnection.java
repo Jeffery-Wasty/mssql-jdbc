@@ -8297,15 +8297,13 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         try {
             this.connectionCommand("SELECT @@TRANCOUNT", "SQLServerConnection.supportsTransactions");
         } catch (SQLServerException e) {
-            if (e.getMessage().trim().equals(SQLServerException.getErrString("R_transactionsNotSupported"))) {
-                supportsTransactions = false;
-                return false;
+            if (e.getMessage().equals(SQLServerException.getErrString("R_transactionsNotSupported"))) {
+                return supportsTransactions = false;
             }
             throw e;
         }
 
-        supportsTransactions = true;
-        return true;
+        return supportsTransactions = true;
     }
 
     /**
