@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -252,24 +253,55 @@ public class SQLServerStatement implements ISQLServerStatement {
         // completely processed. There may be ENVCHANGEs in that response that
         // we must acknowledge before proceeding.
         discardLastExecutionResults();
+        ConfigRead.getInstance();
+        HashMap<Integer,ConfigRetryRule> rls = ConfigRead.getConnectionRules();
 
         // make sure statement hasn't been closed due to closeOnCompletion
         checkClosed();
 
         execProps = new ExecuteProperties(this);
 
-        try {
-            // (Re)execute this Statement with the new command
-            executeCommand(newStmtCmd);
-        } catch (SQLServerException e) {
-            if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT)
-                throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
-            else
-                throw e;
-        } finally {
-            if (newStmtCmd.wasExecuted())
-                lastStmtExecCmd = newStmtCmd;
-        }
+        boolean cont;
+        int retryAttempt = 0;
+
+        do {
+            cont = false;
+            try {
+                // (Re)execute this Statement with the new command
+                executeCommand(newStmtCmd);
+            } catch (SQLServerException e) {
+                if ((ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber()) != null)) {
+                    // If we have an error match, we need to retry (assuming there are retries remaining).
+                    // We wait an interval, retry, and repeat until no intervals remain (intervals are based on retry count)
+                    ConfigRetryRule rule = ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber());
+                    cont = true;
+                    try {
+                        int timeToWait = rule.getWaitTimes().get(retryAttempt);
+                        try {
+                            Thread.sleep(TimeUnit.SECONDS.toMillis(timeToWait));
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                        }
+                    } catch (IndexOutOfBoundsException exc) {
+                        // If it's out of bounds, no more waiting, we can end the loop by doing the normal behavior
+                        if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
+                            throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
+                        } else {
+                            throw e;
+                        }
+                    }
+                    System.out.println("This is error 2714");
+                    retryAttempt++;
+                } else if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
+                    throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
+                } else {
+                    throw e;
+                }
+            } finally {
+                if (newStmtCmd.wasExecuted())
+                    lastStmtExecCmd = newStmtCmd;
+            }
+        } while (cont);
     }
 
     /**
@@ -801,7 +833,41 @@ public class SQLServerStatement implements ISQLServerStatement {
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
-        executeStatement(new StmtExecCmd(this, sql, EXECUTE, NO_GENERATED_KEYS));
+        boolean cont;
+        int retryAttempt = 0;
+        // We have to check the sql to see if there is a query match
+        do {
+            cont = false;
+            try {
+                executeStatement(new StmtExecCmd(this, sql, EXECUTE, NO_GENERATED_KEYS));
+            } catch (SQLServerException e) {
+                if ((ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber()) != null)) {
+                    // If we have an error match, we need to retry (assuming there are retries remaining).
+                    // We wait an interval, retry, and repeat until no intervals remain (intervals are based on retry count)
+                    ConfigRetryRule rule = ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber());
+                    cont = true;
+                    try {
+                        int timeToWait = rule.getWaitTimes().get(retryAttempt);
+                        try {
+                            Thread.sleep(TimeUnit.SECONDS.toMillis(timeToWait));
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                        }
+                    } catch (IndexOutOfBoundsException exc) {
+                        // If it's out of bounds, no more waiting, we can end the loop by doing the normal behavior
+                        if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
+                            throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
+                        } else {
+                            throw e;
+                        }
+                    }
+                    System.out.println("This is error 2714");
+                    retryAttempt++;
+
+                }
+            }
+        } while (cont);
+
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
         return null != resultSet;
     }

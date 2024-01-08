@@ -8,6 +8,7 @@ import java.net.URI;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 
 public class ConfigRead {
     // This is the "driver level retry provider" from the design doc
@@ -21,8 +22,8 @@ public class ConfigRead {
     private static long timeRead;
 
     // Since changes in config should affect all connections, this is the only place we can put the list of rules.
-    private static HashMap<String,ConfigRetryRule> cxnRules = new HashMap<>();
-    private static HashMap<String,ConfigRetryRule> stmtRules = new HashMap<>();
+    private static HashMap<Integer,ConfigRetryRule> cxnRules = new HashMap<>();
+    private static HashMap<Integer,ConfigRetryRule> stmtRules = new HashMap<>();
     private ConfigRead() {
         timeRead = new Date().getTime(); // Then set the time read, maybe switch order.
         readConfig(); // This is only ran first time, so we always read config
@@ -53,7 +54,7 @@ public class ConfigRead {
         // could have a different set of rules.
 
         LinkedList<String> temp = readFromFile("config.txt");
-        System.out.println("x");
+
         createRules(temp);
 
         // Read from file to
@@ -63,8 +64,23 @@ public class ConfigRead {
 
     private static void createRules(LinkedList<String> list) {
         for (String temp : list) {
+            // temp needs to be parsed here for the error list, to see if we need to make multiple rules from a single line.
+            //String[] processed = parseMultipleErrors(temp);
+
             ConfigRetryRule rule = new ConfigRetryRule(temp);
-            cxnRules.put(rule.getError(),rule);
+            if (rule.getError().contains(",")) {
+                // Now we need to make a new one for each.
+                // Parse the error list, get the list of errors, and make a new rule for each based off the composite.
+
+                String[] arr = rule.getError().split(",");
+
+                for (String s : arr) {
+                    ConfigRetryRule rulez = new ConfigRetryRule(s, rule);
+                    cxnRules.put(Integer.parseInt(rulez.getError()), rulez);
+                }
+            } else {
+                cxnRules.put(Integer.parseInt(rule.getError()),rule);
+            }
         }
     }
 
@@ -96,5 +112,18 @@ public class ConfigRead {
             //fail(e.getMessage());
         }
         return list;
+    }
+
+    public static ConfigRetryRule searchRuleSet(int ruleToSearch) {
+        for (Map.Entry<Integer, ConfigRetryRule> entry : cxnRules.entrySet()) {
+            if (entry.getKey() == ruleToSearch) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    public static HashMap<Integer,ConfigRetryRule> getConnectionRules() {
+        return cxnRules;
     }
 }

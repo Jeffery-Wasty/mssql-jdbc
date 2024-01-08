@@ -1,5 +1,6 @@
 package com.microsoft.sqlserver.jdbc;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 
 public class ConfigRetryRule {
@@ -13,15 +14,19 @@ public class ConfigRetryRule {
 
     private String retryError;
 
-    private int retryInterval; // In ms?
+    private String operand;
 
-    private int retryDuration; // In seconds
+    private int initialRetryTime; // In ms?
+
+    private int retryChange; // In seconds
 
     private int retryCount;
 
     private ArrayList<String> retryQueries = new ArrayList<>();
 
-    private boolean isConnection = true;
+    private ArrayList<Integer> waitTimes = new ArrayList<>();
+
+    private boolean isConnection = false;
 
     public ConfigRetryRule(String s) {
         // Each retry rule will come from the line of information being passed in.
@@ -39,6 +44,26 @@ public class ConfigRetryRule {
         // either fill with the defined connection string options, OR use the defaults.
         // In the case of statement, if they are missing, use defaults
         // Once this is done, we have created the rule, we need an easy way to find the rule so, it can be executed.
+
+        // Calculate wait times
+        calcWaitTime();
+    }
+
+    // If we have a rule with multiple errors as the error code, its send back in and separated.
+    public ConfigRetryRule(String rule, ConfigRetryRule r) {
+        copyFromCopy(r);
+        this.retryError = rule;
+    }
+
+    private void copyFromCopy(ConfigRetryRule r) {
+        this.retryError = r.getError();
+        this.operand = r.getOperand();
+        this.initialRetryTime = r.getInitialRetryTime();
+        this.retryChange = r.getRetryChange();
+        this.retryCount = r.getRetryCount();
+        this.retryQueries = r.getRetryQueries();
+        this.waitTimes = r.getWaitTimes();
+        this.isConnection = r.getConnectionStatus();
     }
 
     private String[] parse(String s) {
@@ -61,17 +86,105 @@ public class ConfigRetryRule {
         return st;
     }
 
+    private boolean verifyError(String error) {
+        // Verify if the errors are correct
+        return true;
+    }
+
+    private String[] parseErrorList(String error) {
+        return error.split(",");
+    }
+
     private int addElements(String[] s) {
         // At this point we have an array of property=value
         // We can't assume the order is correct, so we go through each and do a match to above property names.
 
-        for (String st : s) {
+        // First we need to look at the error list since this is the only property that changes the number of rules,
+        // i.e. a rule needs to be created for each error per line in the file, not just per line.
 
+
+
+        for (String st : s) {
+            int index = st.indexOf('=');
+            String first = st.substring(0,index);
+            String second = st.substring(index + 1);
+            try {
+                switch (first) {
+                    case "error":
+                        // If there are multiple errors, take only the first, and send the rest to be created in their own rules.
+                        retryError = second;
+                        break;
+                    case "retryCount":
+                        retryCount = Integer.parseInt(second);
+                        break;
+                    case "initialRetryTime":
+                        initialRetryTime = Integer.parseInt(second);
+                        break;
+                    case "operand":
+                        operand = second;
+                        break;
+                    case "retryChange":
+                        retryChange = Integer.parseInt(second);
+                        break;
+                    case "retryQuery":
+                        //retryQueries = second;
+                        break;
+                    default:
+                        break;
+                }
+            } catch (Exception e) {
+                System.out.println("Invalid value");
+            }
         }
         return 0;
     }
 
+    public void calcWaitTime() {
+        for (int i = 0; i < retryCount; ++i) {
+            int waitTime = initialRetryTime;
+            if (operand.equals("+")) {
+                for (int j = 0; j < i; ++j) {
+                    waitTime += retryChange;
+                }
+            } else if (operand.equals("*")) {
+                for (int k = 0; k < i; ++k) {
+                    waitTime *= retryChange;
+                }
+
+            }
+            waitTimes.add(waitTime);
+        }
+    }
+
     public String getError() {
         return retryError;
+    }
+
+    public String getOperand() {
+        return operand;
+    }
+
+    public int getInitialRetryTime() {
+        return initialRetryTime;
+    }
+
+    public int getRetryChange() {
+        return retryChange;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public boolean getConnectionStatus() {
+        return isConnection;
+    }
+
+    public ArrayList<String> getRetryQueries() {
+        return retryQueries;
+    }
+
+    public ArrayList<Integer> getWaitTimes() {
+        return waitTimes;
     }
 }
