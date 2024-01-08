@@ -833,41 +833,7 @@ public class SQLServerStatement implements ISQLServerStatement {
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
-        boolean cont;
-        int retryAttempt = 0;
-        // We have to check the sql to see if there is a query match
-        do {
-            cont = false;
-            try {
-                executeStatement(new StmtExecCmd(this, sql, EXECUTE, NO_GENERATED_KEYS));
-            } catch (SQLServerException e) {
-                if ((ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber()) != null)) {
-                    // If we have an error match, we need to retry (assuming there are retries remaining).
-                    // We wait an interval, retry, and repeat until no intervals remain (intervals are based on retry count)
-                    ConfigRetryRule rule = ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber());
-                    cont = true;
-                    try {
-                        int timeToWait = rule.getWaitTimes().get(retryAttempt);
-                        try {
-                            Thread.sleep(TimeUnit.SECONDS.toMillis(timeToWait));
-                        } catch (InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                        }
-                    } catch (IndexOutOfBoundsException exc) {
-                        // If it's out of bounds, no more waiting, we can end the loop by doing the normal behavior
-                        if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
-                            throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
-                        } else {
-                            throw e;
-                        }
-                    }
-                    System.out.println("This is error 2714");
-                    retryAttempt++;
-
-                }
-            }
-        } while (cont);
-
+        executeStatement(new StmtExecCmd(this, sql, EXECUTE, NO_GENERATED_KEYS));
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
         return null != resultSet;
     }
