@@ -33,7 +33,7 @@ public class GH2271 {
     public static void BulkCopyForBatchInsert(boolean retainTable) throws Exception {
 
         List<Timestamp> loT = new ArrayList<>();
-        Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("PST"));
+        Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         Date currentDate = new Date();
         String currentDateString = simpleDateFormat.format(currentDate);

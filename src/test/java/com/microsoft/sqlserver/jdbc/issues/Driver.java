@@ -9,10 +9,10 @@ public class Driver {
         log(false, Level.FINEST);
 
         //GH2264.run();
-        //GH2271.BulkCopyForBatchInsert(true);
+        GH2271.BulkCopyForBatchInsert(true);
         //GH2271.BulkCopy(true);
         //GH2281.run();
-        GH2283.run();
+        //GH2283.run();
     }
 
     private static void log(boolean on, Level lvl){
