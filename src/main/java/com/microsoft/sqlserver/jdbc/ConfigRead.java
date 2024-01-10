@@ -18,8 +18,12 @@ public class ConfigRead {
     // 2) If it does exist, check time this last read from config
     // 3) If past exp time, re-read config to update singleton
     // 4) Regardless return a reference to this.
+
+    // Any publicly accessible methods should trigger a reread check.
     private static ConfigRead single_instance = null;
     private static long timeRead;
+    private static String lastQuery = "";
+    private static long timeLastModified;
 
     // Since changes in config should affect all connections, this is the only place we can put the list of rules.
     private static HashMap<Integer,ConfigRetryRule> cxnRules = new HashMap<>();
@@ -33,25 +37,43 @@ public class ConfigRead {
         if (single_instance == null) {
             single_instance = new ConfigRead();
         } else {
-            // We know there is an existing ConfigRead
-            // First check the time, if it's out of range, re-read.
-            Date currentDate = new Date();
-            long currentTime = currentDate.getTime();
-
-            if ((currentTime - timeRead) >= 60000) {
-                timeRead = currentTime; // We only update the time when we read config, not when we check if out of range.
-                readConfig();
-            }
+            reread();
         }
 
         return single_instance;
     }
 
+    private static void reread() {
+        // We know there is an existing ConfigRead
+        // First check the time, if it's out of range, re-read.
+        Date currentDate = new Date();
+        long currentTime = currentDate.getTime();
+
+        if ((currentTime - timeRead) >= 5000 && !compareModified()) {
+            timeRead = currentTime; // We only update the time when we read config, not when we check if out of range.
+            readConfig();
+        }
+    }
+
+    public void storeLastQuery(String sql) {
+        lastQuery = sql;
+    }
+
+    public String retrieveLastQuery() {
+        return lastQuery;
+    }
 
     private static void readConfig() {
         // Handle reading from the config file, and from the file create the rules and assign them to objects.
         // This needs to be handled here, b/c if handled in the connection object, that would mean that each connection
         // could have a different set of rules.
+
+        // What triggers a reread? When the connection is doing work?
+        // 1) Def on connection creation
+        // 2) Cxn retry
+        // 3) Statement execution.
+        // When this happens we check if its been 60 secs (as to not slow down driver with too many rereads) and
+        // then if the file has been modified.
 
         LinkedList<String> temp = readFromFile("config.txt");
 
@@ -84,7 +106,7 @@ public class ConfigRead {
         }
     }
 
-    public static String getCurrentClassPath() {
+    private static String getCurrentClassPath() {
         try {
             String className = new Object() {}.getClass().getEnclosingClass().getName();
             String location = Class.forName(className).getProtectionDomain().getCodeSource().getLocation().getPath();
@@ -96,11 +118,23 @@ public class ConfigRead {
         return null;
     }
 
+    private static boolean compareModified() {
+        String inputFile = "config.txt";
+        String filePath = getCurrentClassPath();
+        try {
+            File f = new File(filePath + inputFile);
+            return f.lastModified() == timeLastModified;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static LinkedList<String> readFromFile(String inputFile) {
         String filePath = getCurrentClassPath();
         LinkedList<String> list = new LinkedList<>();
         try {
             File f = new File(filePath + inputFile);
+            timeLastModified = f.lastModified();
             try (BufferedReader buffer = new BufferedReader(new FileReader(f))) {
                 String readLine = "";
 
@@ -114,7 +148,8 @@ public class ConfigRead {
         return list;
     }
 
-    public static ConfigRetryRule searchRuleSet(int ruleToSearch) {
+    public ConfigRetryRule searchRuleSet(int ruleToSearch) {
+        reread();
         for (Map.Entry<Integer, ConfigRetryRule> entry : cxnRules.entrySet()) {
             if (entry.getKey() == ruleToSearch) {
                 return entry.getValue();
@@ -124,6 +159,7 @@ public class ConfigRead {
     }
 
     public static HashMap<Integer,ConfigRetryRule> getConnectionRules() {
+        reread();
         return cxnRules;
     }
 }

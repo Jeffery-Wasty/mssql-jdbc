@@ -1952,7 +1952,8 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
             // secret and location must be null too.
             if ((null != keyStoreSecret)) {
                 MessageFormat form = new MessageFormat(
-                        SQLServerException.getErrString("R_keyStoreAuthenticationNotSet"));
+                        SQLServerException.getErrString("R_keySt" +
+                                "oreAuthenticationNotSet"));
                 Object[] msgArgs = {"keyStoreSecret"};
                 throw new SQLServerException(form.format(msgArgs), null);
             }

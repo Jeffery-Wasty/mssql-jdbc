@@ -546,6 +546,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
+        ConfigRead.getInstance().storeLastQuery(this.userSQL);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE));
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
         return null != resultSet;

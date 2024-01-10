@@ -253,8 +253,6 @@ public class SQLServerStatement implements ISQLServerStatement {
         // completely processed. There may be ENVCHANGEs in that response that
         // we must acknowledge before proceeding.
         discardLastExecutionResults();
-        ConfigRead.getInstance();
-        HashMap<Integer,ConfigRetryRule> rls = ConfigRead.getConnectionRules();
 
         // make sure statement hasn't been closed due to closeOnCompletion
         checkClosed();
@@ -270,10 +268,10 @@ public class SQLServerStatement implements ISQLServerStatement {
                 // (Re)execute this Statement with the new command
                 executeCommand(newStmtCmd);
             } catch (SQLServerException e) {
-                if ((ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber()) != null)) {
+                ConfigRetryRule rule = ConfigRead.getInstance().searchRuleSet(e.getSQLServerError().getErrorNumber());
+                if (rule != null && rule.getRetryQueries().contains(ConfigRead.getInstance().retrieveLastQuery())) {
                     // If we have an error match, we need to retry (assuming there are retries remaining).
                     // We wait an interval, retry, and repeat until no intervals remain (intervals are based on retry count)
-                    ConfigRetryRule rule = ConfigRead.searchRuleSet(e.getSQLServerError().getErrorNumber());
                     cont = true;
                     try {
                         int timeToWait = rule.getWaitTimes().get(retryAttempt);
