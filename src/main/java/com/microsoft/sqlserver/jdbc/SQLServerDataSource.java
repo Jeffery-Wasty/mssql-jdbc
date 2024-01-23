@@ -1364,6 +1364,52 @@ public class SQLServerDataSource
     }
 
     /**
+     * Sets the 'configuredRetryRules' setting.
+     *
+     * @param configuredRetryRules
+     *        boolean property to have the driver calculate a big decimal's precision from input
+     */
+    @Override
+    public void setConfiguredRetryRules(String configuredRetryRules) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString(),
+                configuredRetryRules);
+    }
+
+    /**
+     * Returns the value for 'configuredRetryRules'.
+     *
+     * @return configuredRetryRules String value
+     */
+    @Override
+    public String getConfiguredRetryRules() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString(),
+                SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue());
+    }
+
+    /**
+     * Sets the 'customConfigLocation' setting.
+     *
+     * @param customConfigLocation
+     *        boolean property to have the driver calculate a big decimal's precision from input
+     */
+    @Override
+    public void setCustomConfigLocation(String customConfigLocation) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.toString(),
+                customConfigLocation);
+    }
+
+    /**
+     * Returns the value for 'customConfigLocation'.
+     *
+     * @return computeBigDecimal boolean value
+     */
+    @Override
+    public String getCustomConfigLocation() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.toString(),
+                SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.getDefaultValue());
+    }
+
+    /**
      * Sets a property string value.
      *
      * @param props

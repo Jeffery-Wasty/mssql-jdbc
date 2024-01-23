@@ -21,7 +21,6 @@ public final class SQLServerError extends StreamPacket implements Serializable {
      */
     enum TransientError {
         // Cannot open database "%.*ls" requested by the login. The login failed.
-        SQLSERVER_ERROR_4060(4060),
 
         /*
          * You will receive this error, when the service is down due to software or hardware upgrades, hardware

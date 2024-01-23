@@ -1,6 +1,7 @@
 package com.microsoft.sqlserver.jdbc.crl;
 
 import com.microsoft.sqlserver.jdbc.ConfigRead;
+import com.microsoft.sqlserver.jdbc.SQLServerException;
 import com.microsoft.sqlserver.jdbc.TestUtils;
 
 import java.sql.*;
@@ -14,21 +15,20 @@ public class Driver {
         log(false, Level.FINEST);
 
         String connectionString = "jdbc:sqlserver://localhost:1433;database=TestDb;user=sa;password=TestPassword123;" +
-                "encrypt=true;trustServerCertificate=true;selectMethod=cursor";
+                "encrypt=true;trustServerCertificate=true;selectMethod=cursor;loginTimeout=5;" +
+                "connectRetryCount=1";
 
-
-//        try(Connection conn = DriverManager.getConnection(connectionString);
-//            Statement s = conn.createStatement() ) {
-//            //s.execute("SELECT * from " + tableName);
-//            createTable(s);
-//        }
 
         try(Connection conn = DriverManager.getConnection(connectionString);
             Statement s = conn.createStatement()) {
             PreparedStatement ps = conn.prepareStatement("create table test_decimal (c1 int, c2 int, c3 int, c4 int, c5 int,);");
-            //s.execute("SELECT * from " + tableName);
-            //createTable(s);
-            ps.execute();
+            //ps.execute();
+            try {
+                createTable(s);
+            } catch (SQLServerException e) {
+                ps.execute();
+            }
+
         }
     }
 

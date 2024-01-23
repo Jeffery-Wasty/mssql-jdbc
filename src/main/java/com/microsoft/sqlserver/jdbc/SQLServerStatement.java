@@ -268,10 +268,11 @@ public class SQLServerStatement implements ISQLServerStatement {
                 // (Re)execute this Statement with the new command
                 executeCommand(newStmtCmd);
             } catch (SQLServerException e) {
-                ConfigRetryRule rule = ConfigRead.getInstance().searchRuleSet(e.getSQLServerError().getErrorNumber());
-                if (rule != null && rule.getRetryQueries().contains(ConfigRead.getInstance().retrieveLastQuery())) {
-                    // If we have an error match, we need to retry (assuming there are retries remaining).
-                    // We wait an interval, retry, and repeat until no intervals remain (intervals are based on retry count)
+                ConfigRetryRule rule = ConfigRead.getInstance().searchRuleSet(e.getSQLServerError().getErrorNumber(), "statement");
+                String query = ConfigRead.getInstance().getLastQuery();
+
+                String[] query1st = query.split(" ");
+                if (rule != null && rule.getRetryQueries().contains(query1st[0])) {
                     cont = true;
                     try {
                         int timeToWait = rule.getWaitTimes().get(retryAttempt);
@@ -281,14 +282,13 @@ public class SQLServerStatement implements ISQLServerStatement {
                             Thread.currentThread().interrupt();
                         }
                     } catch (IndexOutOfBoundsException exc) {
-                        // If it's out of bounds, no more waiting, we can end the loop by doing the normal behavior
                         if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
                             throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
                         } else {
                             throw e;
                         }
                     }
-                    System.out.println("This is error 2714");
+                    System.out.println("LOG: RETRYING"); //TODO replace print statement with logging
                     retryAttempt++;
                 } else if (e.getDriverErrorCode() == SQLServerException.ERROR_QUERY_TIMEOUT) {
                     throw new SQLTimeoutException(e.getMessage(), e.getSQLState(), e.getErrorCode(), e.getCause());
@@ -831,6 +831,7 @@ public class SQLServerStatement implements ISQLServerStatement {
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
+        ConfigRead.getInstance().storeLastQuery(sql);
         executeStatement(new StmtExecCmd(this, sql, EXECUTE, NO_GENERATED_KEYS));
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
         return null != resultSet;

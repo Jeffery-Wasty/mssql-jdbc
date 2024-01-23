@@ -1007,6 +1007,30 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         this.calcBigDecimalPrecision = calcBigDecimalPrecision;
     }
 
+    private String configuredRetryRules = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue();
+
+    @Override
+    public String getConfiguredRetryRules() {
+        return configuredRetryRules;
+    }
+
+    @Override
+    public void setConfiguredRetryRules(String configuredRetryRules) {
+        this.configuredRetryRules = configuredRetryRules;
+    }
+
+    private String customConfigLocation = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.getDefaultValue();
+
+    @Override
+    public String getCustomConfigLocation() {
+        return customConfigLocation;
+    }
+
+    @Override
+    public void setCustomConfigLocation(String customConfigLocation) {
+        this.customConfigLocation = customConfigLocation;
+    }
+
     /** Session Recovery Object */
     private transient IdleConnectionResiliency sessionRecovery = new IdleConnectionResiliency(this);
 
@@ -1910,9 +1934,15 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                         }
                         throw e;
                     } else {
-                        // only retry if transient error
+                        // Retry for all errors transient + passed in to CRL
                         SQLServerError sqlServerError = e.getSQLServerError();
-                        if (!TransientError.isTransientError(sqlServerError)) {
+                        ConfigRetryRule rule = ConfigRead.getInstance().searchRuleSet(sqlServerError.getErrorNumber(), "connection");
+
+                        if (!ConfigRead.getInstance().getReplaceFlag()) {
+                            if (!TransientError.isTransientError(sqlServerError) || rule == null) {
+                                throw e;
+                            }
+                        } else if (rule == null) {
                             throw e;
                         }
 
@@ -2193,6 +2223,24 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     activeConnectionProperties.setProperty(sPropKey,
                             IPAddressPreference.valueOfString(sPropValue).toString());
                 }
+
+                sPropKey = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString();
+                sPropValue = activeConnectionProperties.getProperty(sPropKey);
+                if (null == sPropValue) {
+                    sPropValue = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue();
+                    activeConnectionProperties.setProperty(sPropKey, sPropValue);
+                }
+                configuredRetryRules = sPropValue;
+                ConfigRead.getInstance().setCustomRetryRules(sPropValue);
+
+                sPropKey = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.toString();
+                sPropValue = activeConnectionProperties.getProperty(sPropKey);
+                if (null == sPropValue) {
+                    sPropValue = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.getDefaultValue();
+                    activeConnectionProperties.setProperty(sPropKey, sPropValue);
+                }
+                customConfigLocation = sPropValue;
+                ConfigRead.getInstance().setCustomLocation(sPropValue);
 
                 sPropKey = SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION.toString();
                 sPropValue = activeConnectionProperties.getProperty(sPropKey);

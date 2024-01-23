@@ -497,4 +497,36 @@ public interface ISQLServerConnection extends java.sql.Connection {
      *        A boolean that indicates if the driver should calculate precision from inputted big decimal values.
      */
     void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision);
+
+    /**
+     * Returns the current flag for configuredRetryRules.
+     *
+     * @return configuredRetryRules
+     *         Whether calculating big decimal precision from input values is enabled.
+     */
+    String getConfiguredRetryRules();
+
+    /**
+     * Specifies whether to calculate precision from inputted big decimal values.
+     *
+     * @param configuredRetryRules
+     *        A boolean that indicates if the driver should calculate precision from inputted big decimal values.
+     */
+    void setConfiguredRetryRules(String configuredRetryRules);
+
+    /**
+     * Returns the current flag for customConfigLocation.
+     *
+     * @return customConfigLocation
+     *         Whether calculating big decimal precision from input values is enabled.
+     */
+    String getCustomConfigLocation();
+
+    /**
+     * Specifies whether to calculate precision from inputted big decimal values.
+     *
+     * @param customConfigLocation
+     *        A boolean that indicates if the driver should calculate precision from inputted big decimal values.
+     */
+    void setCustomConfigLocation(String customConfigLocation);
 }

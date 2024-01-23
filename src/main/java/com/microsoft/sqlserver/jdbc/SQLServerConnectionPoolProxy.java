@@ -712,4 +712,46 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     public void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision) {
         wrappedConnection.setCalcBigDecimalPrecision(calcBigDecimalPrecision);
     }
+
+    /**
+     * Returns the current value for 'calcBigDecimalPrecision'.
+     *
+     * @return configuredRetryRules
+     *         a boolean
+     */
+    @Override
+    public String getConfiguredRetryRules() {
+        return wrappedConnection.getConfiguredRetryRules();
+    }
+
+    /**
+     * Sets the current value of 'calculateBigDecimalPrecision' for the driver.
+     *
+     * @param configuredRetryRules
+     */
+    @Override
+    public void setConfiguredRetryRules(String configuredRetryRules) {
+        wrappedConnection.setConfiguredRetryRules(configuredRetryRules);
+    }
+
+    /**
+     * Returns the current value for 'calcBigDecimalPrecision'.
+     *
+     * @return customConfigLocation
+     *         a boolean
+     */
+    @Override
+    public String getCustomConfigLocation() {
+        return wrappedConnection.getCustomConfigLocation();
+    }
+
+    /**
+     * Sets the current value of 'calculateBigDecimalPrecision' for the driver.
+     *
+     * @param customConfigLocation
+     */
+    @Override
+    public void setCustomConfigLocation(String customConfigLocation) {
+        wrappedConnection.setCustomConfigLocation(customConfigLocation);
+    }
 }

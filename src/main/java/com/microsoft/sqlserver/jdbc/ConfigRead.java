@@ -11,26 +11,21 @@ import java.util.LinkedList;
 import java.util.Map;
 
 public class ConfigRead {
-    // This is the "driver level retry provider" from the design doc
-    // Resp for reading config file
-    // Logical flow:
-    // 1) If this doesn't exist, create and read config
-    // 2) If it does exist, check time this last read from config
-    // 3) If past exp time, re-read config to update singleton
-    // 4) Regardless return a reference to this.
-
-    // Any publicly accessible methods should trigger a reread check.
+    private final static int timeToRead = 30000; //In ms
+    private final static String defaultName = "mssql-jdbc.properties";
     private static ConfigRead single_instance = null;
     private static long timeRead;
     private static String lastQuery = "";
     private static long timeLastModified;
-
-    // Since changes in config should affect all connections, this is the only place we can put the list of rules.
+    private static String customRetryRules = "";
+    private static String customLocation = ""; //Only set if passed in to connection string.
+    private static boolean replaceFlag; // Are we replacing the list of transient errors?
     private static HashMap<Integer,ConfigRetryRule> cxnRules = new HashMap<>();
-    private static HashMap<Integer,ConfigRetryRule> stmtRules = new HashMap<>();
+    private static final HashMap<Integer,ConfigRetryRule> stmtRules = new HashMap<>();
+
     private ConfigRead() {
-        timeRead = new Date().getTime(); // Then set the time read, maybe switch order.
-        readConfig(); // This is only ran first time, so we always read config
+        timeRead = new Date().getTime();
+        readConfig();
     }
 
     public static synchronized ConfigRead getInstance() {
@@ -43,14 +38,22 @@ public class ConfigRead {
         return single_instance;
     }
 
-    private static void reread() {
-        // We know there is an existing ConfigRead
-        // First check the time, if it's out of range, re-read.
-        Date currentDate = new Date();
-        long currentTime = currentDate.getTime();
+    public void setCustomLocation(String cL) {
+        if (!customLocation.isEmpty()) {
+            customLocation = cL;
+            readConfig();
+        }
+    }
 
-        if ((currentTime - timeRead) >= 5000 && !compareModified()) {
-            timeRead = currentTime; // We only update the time when we read config, not when we check if out of range.
+    public void setCustomRetryRules(String cRR) {
+        customRetryRules = cRR;
+    }
+
+    private static void reread() {
+        long currentTime = new Date().getTime();
+
+        if ((currentTime - timeRead) >= timeToRead && !compareModified()) {
+            timeRead = currentTime;
             readConfig();
         }
     }
@@ -59,49 +62,63 @@ public class ConfigRead {
         lastQuery = sql;
     }
 
-    public String retrieveLastQuery() {
+    public String getLastQuery() {
         return lastQuery;
     }
 
     private static void readConfig() {
-        // Handle reading from the config file, and from the file create the rules and assign them to objects.
-        // This needs to be handled here, b/c if handled in the connection object, that would mean that each connection
-        // could have a different set of rules.
+        LinkedList<String> temp = null;
 
-        // What triggers a reread? When the connection is doing work?
-        // 1) Def on connection creation
-        // 2) Cxn retry
-        // 3) Statement execution.
-        // When this happens we check if its been 60 secs (as to not slow down driver with too many rereads) and
-        // then if the file has been modified.
+        try {
+            if (!customLocation.isEmpty()) {
+                temp = readFromFile(customLocation, ""); //TODO input validation
+            } else {
+                temp = readFromFile(null, defaultName);
+            }
+        } catch (IOException e) {
+            temp = new LinkedList<>();
+            if (!customRetryRules.isEmpty()) {
+                for (String s : customRetryRules.split("]")) {
+                    temp.add(s);
+                }
+            }
+        }
 
-        LinkedList<String> temp = readFromFile("config.txt");
-
-        createRules(temp);
-
-        // Read from file to
-        // Parse each rule from one another
-        // Create a retry rule object from each parsed rule.
+        if (temp != null) {
+            createRules(temp);
+        }
     }
 
     private static void createRules(LinkedList<String> list) {
         for (String temp : list) {
-            // temp needs to be parsed here for the error list, to see if we need to make multiple rules from a single line.
-            //String[] processed = parseMultipleErrors(temp);
 
             ConfigRetryRule rule = new ConfigRetryRule(temp);
             if (rule.getError().contains(",")) {
-                // Now we need to make a new one for each.
-                // Parse the error list, get the list of errors, and make a new rule for each based off the composite.
 
                 String[] arr = rule.getError().split(",");
 
                 for (String s : arr) {
                     ConfigRetryRule rulez = new ConfigRetryRule(s, rule);
-                    cxnRules.put(Integer.parseInt(rulez.getError()), rulez);
+                    if (rule.getConnectionStatus()) {
+                        if (rule.getReplaceExisting()) {
+                            cxnRules = new HashMap<>();
+                            replaceFlag = true;
+                        }
+                        cxnRules.put(Integer.parseInt(rulez.getError()), rulez);
+                    } else {
+                        stmtRules.put(Integer.parseInt(rulez.getError()), rulez);
+                    }
                 }
             } else {
-                cxnRules.put(Integer.parseInt(rule.getError()),rule);
+                if (rule.getConnectionStatus()) {
+                    if (rule.getReplaceExisting()) {
+                        cxnRules = new HashMap<>();
+                        replaceFlag = true;
+                    }
+                    cxnRules.put(Integer.parseInt(rule.getError()), rule);
+                } else {
+                    stmtRules.put(Integer.parseInt(rule.getError()), rule);
+                }
             }
         }
     }
@@ -113,24 +130,32 @@ public class ConfigRead {
             URI uri = new URI(location + "/");
             return uri.getPath();
         } catch (Exception e) {
-            //fail("Failed to get CSV file path. " + e.getMessage());
+            //TODO handle exception
         }
         return null;
     }
 
     private static boolean compareModified() {
-        String inputFile = "config.txt";
-        String filePath = getCurrentClassPath();
+        String inputToUse;
+        if (!customLocation.isEmpty()) {
+            inputToUse = customLocation;
+        } else {
+            inputToUse = getCurrentClassPath() + defaultName;
+        }
+
         try {
-            File f = new File(filePath + inputFile);
+            File f = new File(inputToUse);
             return f.lastModified() == timeLastModified;
         } catch (Exception e) {
             return false;
         }
     }
 
-    private static LinkedList<String> readFromFile(String inputFile) {
-        String filePath = getCurrentClassPath();
+    private static LinkedList<String> readFromFile(String filePath, String inputFile) throws IOException {
+        if (filePath == null) {
+            filePath = getCurrentClassPath();
+        }
+
         LinkedList<String> list = new LinkedList<>();
         try {
             File f = new File(filePath + inputFile);
@@ -143,23 +168,31 @@ public class ConfigRead {
                 }
             }
         } catch (IOException e) {
-            //fail(e.getMessage());
+            throw new IOException();
         }
         return list;
     }
 
-    public ConfigRetryRule searchRuleSet(int ruleToSearch) {
+    public ConfigRetryRule searchRuleSet(int ruleToSearch, String ruleSet) {
         reread();
-        for (Map.Entry<Integer, ConfigRetryRule> entry : cxnRules.entrySet()) {
-            if (entry.getKey() == ruleToSearch) {
-                return entry.getValue();
+        if (ruleSet.equals("statement")) {
+            for (Map.Entry<Integer, ConfigRetryRule> entry : stmtRules.entrySet()) {
+                if (entry.getKey() == ruleToSearch) {
+                    return entry.getValue();
+                }
+            }
+        } else {
+            for (Map.Entry<Integer, ConfigRetryRule> entry : cxnRules.entrySet()) {
+                if (entry.getKey() == ruleToSearch) {
+                    return entry.getValue();
+                }
             }
         }
+
         return null;
     }
 
-    public static HashMap<Integer,ConfigRetryRule> getConnectionRules() {
-        reread();
-        return cxnRules;
+    public boolean getReplaceFlag() {
+        return replaceFlag;
     }
 }
