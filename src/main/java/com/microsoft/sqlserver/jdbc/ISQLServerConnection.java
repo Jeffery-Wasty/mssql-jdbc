@@ -499,20 +499,20 @@ public interface ISQLServerConnection extends java.sql.Connection {
     void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision);
 
     /**
-     * Returns the current flag for configuredRetryRules.
+     * Returns the current flag for retryExec.
      *
-     * @return configuredRetryRules
+     * @return retryExec
      *         Whether calculating big decimal precision from input values is enabled.
      */
-    String getConfiguredRetryRules();
+    String getRetryExec();
 
     /**
      * Specifies whether to calculate precision from inputted big decimal values.
      *
-     * @param configuredRetryRules
+     * @param retryExec
      *        A boolean that indicates if the driver should calculate precision from inputted big decimal values.
      */
-    void setConfiguredRetryRules(String configuredRetryRules);
+    void setRetryExec(String retryExec);
 
     /**
      * Returns the current flag for customConfigLocation.

@@ -269,10 +269,14 @@ public class SQLServerStatement implements ISQLServerStatement {
                 executeCommand(newStmtCmd);
             } catch (SQLServerException e) {
                 ConfigRetryRule rule = ConfigRead.getInstance().searchRuleSet(e.getSQLServerError().getErrorNumber(), "statement");
-                String query = ConfigRead.getInstance().getLastQuery();
+                boolean meetsQueryMatch = true;
 
-                String[] query1st = query.split(" ");
-                if (rule != null && rule.getRetryQueries().contains(query1st[0])) {
+                if (rule != null && !(rule.getRetryQueries().isEmpty())) {
+                    // If query has been defined for the rule, we need to query match
+                    meetsQueryMatch = rule.getRetryQueries().contains(ConfigRead.getInstance().getLastQuery().split(" ")[0]);
+                }
+
+                if (rule != null && meetsQueryMatch) {
                     cont = true;
                     try {
                         int timeToWait = rule.getWaitTimes().get(retryAttempt);

@@ -1007,16 +1007,16 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         this.calcBigDecimalPrecision = calcBigDecimalPrecision;
     }
 
-    private String configuredRetryRules = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue();
+    private String retryExec = SQLServerDriverStringProperty.RETRY_EXEC.getDefaultValue();
 
     @Override
-    public String getConfiguredRetryRules() {
-        return configuredRetryRules;
+    public String getRetryExec() {
+        return retryExec;
     }
 
     @Override
-    public void setConfiguredRetryRules(String configuredRetryRules) {
-        this.configuredRetryRules = configuredRetryRules;
+    public void setRetryExec(String retryExec) {
+        this.retryExec = retryExec;
     }
 
     private String customConfigLocation = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.getDefaultValue();
@@ -2224,13 +2224,13 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                             IPAddressPreference.valueOfString(sPropValue).toString());
                 }
 
-                sPropKey = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString();
+                sPropKey = SQLServerDriverStringProperty.RETRY_EXEC.toString();
                 sPropValue = activeConnectionProperties.getProperty(sPropKey);
                 if (null == sPropValue) {
-                    sPropValue = SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue();
+                    sPropValue = SQLServerDriverStringProperty.RETRY_EXEC.getDefaultValue();
                     activeConnectionProperties.setProperty(sPropKey, sPropValue);
                 }
-                configuredRetryRules = sPropValue;
+                retryExec = sPropValue;
                 ConfigRead.getInstance().setCustomRetryRules(sPropValue);
 
                 sPropKey = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.toString();

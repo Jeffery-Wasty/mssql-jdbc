@@ -1364,26 +1364,26 @@ public class SQLServerDataSource
     }
 
     /**
-     * Sets the 'configuredRetryRules' setting.
+     * Sets the 'retryExec' setting.
      *
-     * @param configuredRetryRules
+     * @param retryExec
      *        boolean property to have the driver calculate a big decimal's precision from input
      */
     @Override
-    public void setConfiguredRetryRules(String configuredRetryRules) {
-        setStringProperty(connectionProps, SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString(),
-                configuredRetryRules);
+    public void setRetryExec(String retryExec) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_EXEC.toString(),
+                retryExec);
     }
 
     /**
-     * Returns the value for 'configuredRetryRules'.
+     * Returns the value for 'retryExec'.
      *
-     * @return configuredRetryRules String value
+     * @return retryExec String value
      */
     @Override
-    public String getConfiguredRetryRules() {
-        return getStringProperty(connectionProps, SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.toString(),
-                SQLServerDriverStringProperty.CONFIGURED_RETRY_RULES.getDefaultValue());
+    public String getRetryExec() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_EXEC.toString(),
+                SQLServerDriverStringProperty.RETRY_EXEC.getDefaultValue());
     }
 
     /**

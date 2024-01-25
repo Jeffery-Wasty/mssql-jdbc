@@ -21,7 +21,7 @@ public class ConfigRead {
     private static String customLocation = ""; //Only set if passed in to connection string.
     private static boolean replaceFlag; // Are we replacing the list of transient errors?
     private static HashMap<Integer,ConfigRetryRule> cxnRules = new HashMap<>();
-    private static final HashMap<Integer,ConfigRetryRule> stmtRules = new HashMap<>();
+    private static HashMap<Integer,ConfigRetryRule> stmtRules = new HashMap<>();
 
     private ConfigRead() {
         timeRead = new Date().getTime();
@@ -39,7 +39,7 @@ public class ConfigRead {
     }
 
     public void setCustomLocation(String cL) {
-        if (!customLocation.isEmpty()) {
+        if (!cL.isEmpty()) {
             customLocation = cL;
             readConfig();
         }
@@ -47,6 +47,7 @@ public class ConfigRead {
 
     public void setCustomRetryRules(String cRR) {
         customRetryRules = cRR;
+        readConfig();
     }
 
     private static void reread() {
@@ -59,7 +60,7 @@ public class ConfigRead {
     }
 
     public void storeLastQuery(String sql) {
-        lastQuery = sql;
+        lastQuery = sql.toLowerCase();
     }
 
     public String getLastQuery() {
@@ -69,18 +70,21 @@ public class ConfigRead {
     private static void readConfig() {
         LinkedList<String> temp = null;
 
-        try {
-            if (!customLocation.isEmpty()) {
-                temp = readFromFile(customLocation, ""); //TODO input validation
-            } else {
-                temp = readFromFile(null, defaultName);
-            }
-        } catch (IOException e) {
+        if (!customRetryRules.isEmpty()) {
+            // If user as set custom rules in conn string, then we use those over any file
             temp = new LinkedList<>();
-            if (!customRetryRules.isEmpty()) {
-                for (String s : customRetryRules.split("]")) {
-                    temp.add(s);
+            for (String s : customRetryRules.split(";")) {
+                temp.add(s);
+            }
+        } else {
+            try {
+                if (!customLocation.isEmpty()) {
+                    temp = readFromFile(customLocation, "");
+                } else {
+                    temp = readFromFile(null, defaultName);
                 }
+            } catch (IOException e) {
+                // TODO handle IO exception
             }
         }
 
@@ -90,6 +94,9 @@ public class ConfigRead {
     }
 
     private static void createRules(LinkedList<String> list) {
+        cxnRules = new HashMap<>();
+        stmtRules = new HashMap<>();
+
         for (String temp : list) {
 
             ConfigRetryRule rule = new ConfigRetryRule(temp);
@@ -164,10 +171,18 @@ public class ConfigRead {
                 String readLine = "";
 
                 while ((readLine = buffer.readLine()) != null) {
-                    list.add(readLine);
+                    if (readLine.startsWith("retryExec")) {
+                        String value = readLine.toString().split("=")[1];
+                        // Values in retry exec can either start with a number OR @
+                        for (String s : value.split(";")) {
+                            list.add(s);
+                        }
+                    }
+                    //list.add(readLine);
                 }
             }
         } catch (IOException e) {
+            // TODO handle IO Exception
             throw new IOException();
         }
         return list;
