@@ -2231,7 +2231,8 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     activeConnectionProperties.setProperty(sPropKey, sPropValue);
                 }
                 retryExec = sPropValue;
-                ConfigRead.getInstance().setCustomRetryRules(sPropValue);
+                //ConfigRead.getInstance().setCustomRetryRules(sPropValue);
+                ConfigRead.getInstance().setFromConnectionString(sPropValue);
 
                 sPropKey = SQLServerDriverStringProperty.CUSTOM_CONFIG_LOCATION.toString();
                 sPropValue = activeConnectionProperties.getProperty(sPropKey);

@@ -17,11 +17,8 @@ public class Driver {
 
         String connectionString = "jdbc:sqlserver://localhost:1433;database=TestDb;user=sa;password=TestPassword123;" +
                 "encrypt=true;trustServerCertificate=true;selectMethod=cursor;loginTimeout=5;" +
-                "connectRetryCount=1;"
+                "connectRetryCount=1;";
                 //+"retryExec={2714,2716:1,2*2:CREATE;2715:1,3;+4060,4070};"
-                +"customConfigLocation=C:\\Users\\Jeff Wasty\\Documents\\mssql-jdbc-jeff\\mssql-jdbc.properties";
-
-        //RetryExec={49918,40501,10928:5,10+5:SELECT c1;49919:2,10+:CREATE;40501,40540:4,5}
 
         try(Connection conn = DriverManager.getConnection(connectionString);
             Statement s = conn.createStatement()) {
@@ -31,7 +28,6 @@ public class Driver {
             } catch (SQLServerException e) {
                 ps.execute();
             }
-
         }
     }
 

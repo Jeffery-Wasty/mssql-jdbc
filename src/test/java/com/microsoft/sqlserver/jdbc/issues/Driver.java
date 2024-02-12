@@ -6,11 +6,9 @@ import java.util.logging.Logger;
 
 public class Driver {
     public static void main(String[] args) throws Exception {
-        log(false, Level.FINEST);
+        log(true, Level.FINEST);
 
-        //GH2271.BulkCopyForBatchInsert(true);
-        //GH2271.BulkCopy(true);
-        GH2264.run();
+        GH2309.run();
     }
 
     private static void log(boolean on, Level lvl){

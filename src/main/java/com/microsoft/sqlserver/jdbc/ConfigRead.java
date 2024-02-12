@@ -50,6 +50,20 @@ public class ConfigRead {
         readConfig();
     }
 
+    public void setFromConnectionString(String custom) {
+        if (!custom.isEmpty()) {
+            if (Character.isDigit(custom.charAt(0))) {
+                // If we start with a digit, these are rules
+                setCustomRetryRules(custom);
+            } else if (Character.isLetter(custom.charAt(0))) {
+                setCustomLocation(custom);
+            } else {
+                // We got supplied some nonsense, error out
+                // TODO handle error
+            }
+        }
+    }
+
     private static void reread() {
         long currentTime = new Date().getTime();
 
@@ -173,7 +187,6 @@ public class ConfigRead {
                 while ((readLine = buffer.readLine()) != null) {
                     if (readLine.startsWith("retryExec")) {
                         String value = readLine.toString().split("=")[1];
-                        // Values in retry exec can either start with a number OR @
                         for (String s : value.split(";")) {
                             list.add(s);
                         }
