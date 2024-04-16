@@ -21,7 +21,8 @@ public class GH2380 {
         SQLServerConnection conn = (SQLServerConnection)DriverManager.getConnection(connectionString);
         try {
             Path csvFile = Files.createTempFile("bulk_csv", ".csv");
-            Files.writeString(csvFile, "1, 2022/7/28 12:21:00.0000000", StandardCharsets.UTF_8);
+            Files.writeString(csvFile, "1, 2022/7/28 12:21:00.0000", StandardCharsets.UTF_8);
+            //Files.writeString(csvFile, "1, 2022/7/28 12:21:00", StandardCharsets.UTF_8);
 
             SQLServerBulkCSVFileRecord bulkRecord = new SQLServerBulkCSVFileRecord(csvFile.toAbsolutePath().toString(),
                     StandardCharsets.UTF_8.name(), ",", false);
@@ -39,9 +40,10 @@ public class GH2380 {
 
         } catch (IOException | SQLException e) {
             e.printStackTrace();
-            Statement statement = conn.createStatement();
-            //statement.execute("SET IDENTITY_INSERT dbo.TEST_IDENTITY_TABLE OFF;");
-            statement.execute("SET IDENTITY_INSERT dbo.TEST_IDENTITY_TABLE2 ON;");
         }
+
+        Statement statement = conn.createStatement();
+        //statement.execute("SET IDENTITY_INSERT dbo.TEST_IDENTITY_TABLE OFF;");
+        statement.execute("SET IDENTITY_INSERT dbo.TEST_IDENTITY_TABLE2 ON;");
     }
 }

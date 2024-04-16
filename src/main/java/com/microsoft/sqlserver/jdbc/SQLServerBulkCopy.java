@@ -17,6 +17,7 @@ import java.io.StringReader;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -690,6 +691,14 @@ public class SQLServerBulkCopy implements java.lang.AutoCloseable, java.io.Seria
                             throw new SQLServerException(SQLServerException.getErrString("R_queryTimedOut"),
                                     SQLState.STATEMENT_CANCELED, DriverError.NOT_SET, sqlEx);
                         }
+                    }
+
+                    if (copyOptions.isKeepIdentity()) {
+                        //SQLServerBulkCSVFileRecord bulkRecord = new SQLServerBulkCSVFileRecord("",StandardCharsets.UTF_8.name(), "", false);
+                        copyOptions.setKeepIdentity(false);
+                        setBulkCopyOptions(copyOptions);
+                        //ResultSet rs = statement.executeQuery("SET IDENTITY_INSERT dbo.TEST_IDENTITY_TABLE OFF;");
+                        writeToServer();
                     }
 
                     // It is not a timeout exception. Re-throw.
