@@ -555,7 +555,6 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
         }
 
         checkClosed();
-
         connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE_UPDATE));
 
