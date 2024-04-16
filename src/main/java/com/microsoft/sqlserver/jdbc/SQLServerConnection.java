@@ -315,6 +315,9 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
     /**
      * Generate a 6 byte random array for netAddress
+     * As per TDS spec this is a unique clientID (MAC address) used to identify the client.
+     * A random number is used instead of the actual MAC address to avoid PII issues.
+     * As per spec this is informational only server does not process this so there is no need to use SecureRandom.
      * 
      * @return byte[]
      */
@@ -1050,6 +1053,9 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         this.ignoreOffsetOnDateTimeOffsetConversion = ignoreOffsetOnDateTimeOffsetConversion;
     }
 
+    /**
+     * Flag to indicate whether the driver should calculate precision for BigDecimal inputs, as opposed to using the maximum allowed valued for precision (38).
+     */
     private boolean calcBigDecimalPrecision = SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION
             .getDefaultValue();
 
@@ -1753,6 +1759,19 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         return pooledConnectionParent;
     }
 
+    /**
+     * List of listeners which are called before reconnecting.
+     */
+    private List<ReconnectListener> reconnectListeners = new ArrayList<>();
+
+    public void registerBeforeReconnectListener(ReconnectListener reconnectListener) {
+        reconnectListeners.add(reconnectListener);
+    }
+
+    public void removeBeforeReconnectListener(ReconnectListener reconnectListener) {
+        reconnectListeners.remove(reconnectListener);
+    }
+
     SQLServerConnection(String parentInfo) {
         int connectionID = nextConnectionID(); // sequential connection id
         traceID = "ConnectionID:" + connectionID;
@@ -1791,6 +1810,11 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
     final void resetPooledConnection() {
         tdsChannel.resetPooledConnection();
         initResettableValues();
+
+        // reset prepared statement handle cache
+        if (null != preparedStatementHandleCache) {
+            preparedStatementHandleCache.clear();
+        }
     }
 
     /**
@@ -2137,9 +2161,9 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
                 // Set to larger default value for Azure connections to greatly improve recovery
                 if (isAzureSynapseOnDemandEndpoint()) {
-                    connectRetryCount = AZURE_SERVER_ENDPOINT_RETRY_COUNT_DEFAULT;
-                } else if (isAzureSqlServerEndpoint()) {
                     connectRetryCount = AZURE_SYNAPSE_ONDEMAND_ENDPOINT_RETRY_COUNT_DEFAFULT;
+                } else if (isAzureSqlServerEndpoint()) {
+                    connectRetryCount = AZURE_SERVER_ENDPOINT_RETRY_COUNT_DEFAULT;
                 }
             }
         }
@@ -3204,9 +3228,15 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
             state = State.OPENED;
 
+            // Socket timeout is bounded by loginTimeout during the login phase.
+            // Reset socket timeout back to the original value.
+            tdsChannel.resetTcpSocketTimeout();
+
             if (connectionlogger.isLoggable(Level.FINER)) {
                 connectionlogger.finer(toString() + " End of connect");
             }
+        } catch (SocketException e) {
+            throw new SQLServerException(e.getMessage(), null);
         } finally {
             // once we exit the connect function, the connection can be only in one of two
             // states, Opened or Closed(if an exception occurred)
@@ -3217,6 +3247,21 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
             activeConnectionProperties.remove(SQLServerDriverStringProperty.TRUST_STORE_PASSWORD.toString());
         }
         return this;
+    }
+
+    // log open connection failures
+    private void logConnectFailure(int attemptNumber, SQLServerException e, SQLServerError sqlServerError) {
+        loggerResiliency.finer(toString() + " Connection open - connection failed on attempt: " + attemptNumber + ".");
+
+        if (e != null) {
+            loggerResiliency.finer(
+                    toString() + " Connection open - connection failure. Driver error code: " + e.getDriverErrorCode());
+        }
+
+        if (null != sqlServerError && !sqlServerError.getErrorMessage().isEmpty()) {
+            loggerResiliency.finer(toString() + " Connection open - connection failure. SQL Server error : "
+                    + sqlServerError.getErrorMessage());
+        }
     }
 
     /**
@@ -3234,6 +3279,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         int fedauthRetryInterval = BACKOFF_INTERVAL; // milliseconds to sleep (back off) between attempts.
 
         long timeoutUnitInterval;
+        long timeForFirstTry = 0; // time it took to do 1st try in ms
 
         boolean useFailoverHost = false;
         FailoverInfo tempFailover = null;
@@ -3431,34 +3477,24 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                                     + connectRetryCount + " reached.");
                 }
 
-                int errorCode = e.getErrorCode();
-                int driverErrorCode = e.getDriverErrorCode();
+                // estimate time it took to do 1 try
+                if (attemptNumber == 0) {
+                    timeForFirstTry = (System.currentTimeMillis() - timerStart);
+                }
+
                 sqlServerError = e.getSQLServerError();
 
-                if (SQLServerException.LOGON_FAILED == errorCode // logon failed, ie bad password
-                        || SQLServerException.PASSWORD_EXPIRED == errorCode // password expired
-                        || SQLServerException.USER_ACCOUNT_LOCKED == errorCode // user account locked
-                        || SQLServerException.DRIVER_ERROR_INVALID_TDS == driverErrorCode // invalid TDS
-                        || SQLServerException.DRIVER_ERROR_SSL_FAILED == driverErrorCode // SSL failure
-                        || SQLServerException.DRIVER_ERROR_INTERMITTENT_TLS_FAILED == driverErrorCode // TLS1.2 failure
-                        || SQLServerException.DRIVER_ERROR_UNSUPPORTED_CONFIG == driverErrorCode // unsupported config
-                                                                                                 // (eg Sphinx, invalid
-                                                                                                 // packetsize, etc)
-                        || (SQLServerException.ERROR_SOCKET_TIMEOUT == driverErrorCode // socket timeout
-                                && (!isDBMirroring || attemptNumber > 0)) // If mirroring, only close after failover has been tried (attempt >= 1)
-                        || timerHasExpired(timerExpire)
-                // for non-dbmirroring cases, do not retry after tcp socket connection succeeds
+                if (isFatalError(e) // do not retry on fatal errors
+                        || timerHasExpired(timerExpire) // no time left
+                        || (timerRemaining(timerExpire) < TimeUnit.SECONDS.toMillis(connectRetryInterval)
+                                + 2 * timeForFirstTry) // not enough time for another retry
+                        || (connectRetryCount == 0 && !isDBMirroring && !useTnir) // retries disabled
+                        // retry at least once for TNIR and failover
+                        || (connectRetryCount == 0 && (isDBMirroring || useTnir) && attemptNumber > 0)
+                        || (connectRetryCount != 0 && attemptNumber >= connectRetryCount) // no retries left
                 ) {
                     if (loggerResiliency.isLoggable(Level.FINER)) {
-                        loggerResiliency.finer(
-                                toString() + " Connection open - connection failed on attempt: " + attemptNumber + ".");
-                        loggerResiliency.finer(toString() + " Connection open - connection failure. Driver error code: "
-                                + driverErrorCode);
-                        if (null != sqlServerError && !sqlServerError.getErrorMessage().isEmpty()) {
-                            loggerResiliency
-                                    .finer(toString() + " Connection open - connection failure. SQL Server error : "
-                                            + sqlServerError.getErrorMessage());
-                        }
+                        logConnectFailure(attemptNumber, e, sqlServerError);
                     }
 
                     // close the connection and throw the error back
@@ -3466,15 +3502,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     throw e;
                 } else {
                     if (loggerResiliency.isLoggable(Level.FINER)) {
-                        loggerResiliency.finer(
-                                toString() + " Connection open - connection failed on attempt: " + attemptNumber + ".");
-                        loggerResiliency.finer(toString() + " Connection open - connection failure. Driver error code: "
-                                + driverErrorCode);
-                        if (null != sqlServerError && !sqlServerError.getErrorMessage().isEmpty()) {
-                            loggerResiliency
-                                    .finer(toString() + " Connection open - connection failure. SQL Server error : "
-                                            + sqlServerError.getErrorMessage());
-                        }
+                        logConnectFailure(attemptNumber, e, sqlServerError);
                     }
 
                     // Close the TDS channel from the failed connection attempt so that we don't
@@ -3493,15 +3521,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     if (remainingMilliseconds <= fedauthRetryInterval) {
 
                         if (loggerResiliency.isLoggable(Level.FINER)) {
-                            loggerResiliency.finer(toString() + " Connection open - connection failed on attempt: "
-                                    + attemptNumber + ".");
-                            loggerResiliency.finer(toString()
-                                    + " Connection open - connection failure. Driver error code: " + driverErrorCode);
-                            if (null != sqlServerError && !sqlServerError.getErrorMessage().isEmpty()) {
-                                loggerResiliency
-                                        .finer(toString() + " Connection open - connection failure. SQL Server error : "
-                                                + sqlServerError.getErrorMessage());
-                            }
+                            logConnectFailure(attemptNumber, e, sqlServerError);
                         }
 
                         throw e;
@@ -3514,19 +3534,22 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
             // the network with requests, then update sleep interval for next iteration (max 1 second interval)
             // We have to sleep for every attempt in case of non-dbMirroring scenarios (including multisubnetfailover),
             // Whereas for dbMirroring, we sleep for every two attempts as each attempt is to a different server.
-            if (!isDBMirroring || (1 == attemptNumber % 2)) {
-                if (loggerResiliency.isLoggable(Level.FINER)) {
-                    loggerResiliency.finer(toString() + " Connection open - sleeping milisec: " + connectRetryInterval);
-                }
-                if (loggerResiliency.isLoggable(Level.FINER)) {
-                    loggerResiliency.finer(toString() + " Connection open - connection failed on transient error "
-                            + (sqlServerError != null ? sqlServerError.getErrorNumber() : "")
-                            + ". Wait for connectRetryInterval(" + connectRetryInterval + ")s before retry #"
-                            + attemptNumber);
-                }
+            // Make sure there's enough time to do another retry
+            if (!isDBMirroring || (isDBMirroring && (0 == attemptNumber % 2))
+                    && (attemptNumber < connectRetryCount && connectRetryCount != 0) && timerRemaining(
+                            timerExpire) > (TimeUnit.SECONDS.toMillis(connectRetryInterval) + 2 * timeForFirstTry)) {
 
-                sleepForInterval(fedauthRetryInterval);
-                fedauthRetryInterval = (fedauthRetryInterval < 500) ? fedauthRetryInterval * 2 : 1000;
+                // don't wait for TNIR
+                if (!(useTnir && attemptNumber == 0)) {
+                    if (loggerResiliency.isLoggable(Level.FINER)) {
+                        loggerResiliency.finer(toString() + " Connection open - connection failed on transient error "
+                                + (sqlServerError != null ? sqlServerError.getErrorNumber() : "")
+                                + ". Wait for connectRetryInterval(" + connectRetryInterval + ")s before retry #"
+                                + attemptNumber);
+                    }
+
+                    sleepForInterval(TimeUnit.SECONDS.toMillis(connectRetryInterval));
+                }
             }
 
             // Update timeout interval (but no more than the point where we're supposed to fail: timerExpire)
@@ -3619,31 +3642,22 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         }
     }
 
+    // non recoverable or retryable fatal errors
     boolean isFatalError(SQLServerException e) {
         /*
          * NOTE: If these conditions are modified, consider modification to conditions in SQLServerConnection::login()
          * and Reconnect::run()
          */
+        int errorCode = e.getErrorCode();
+        int driverErrorCode = e.getDriverErrorCode();
 
-        // actual logon failed (e.g. bad password)
-        if ((SQLServerException.LOGON_FAILED == e.getErrorCode())
-                // actual logon failed (e.g. password expired)
-                || (SQLServerException.PASSWORD_EXPIRED == e.getErrorCode())
-                // actual logon failed (e.g. user account locked)
-                || (SQLServerException.USER_ACCOUNT_LOCKED == e.getErrorCode())
-                // invalid TDS received from server
-                || (SQLServerException.DRIVER_ERROR_INVALID_TDS == e.getDriverErrorCode())
-                // failure negotiating SSL
-                || (SQLServerException.DRIVER_ERROR_SSL_FAILED == e.getDriverErrorCode())
-                // failure TLS1.2
-                || (SQLServerException.DRIVER_ERROR_INTERMITTENT_TLS_FAILED == e.getDriverErrorCode())
-                // unsupported configuration (e.g. Sphinx, invalid packet size, etc.)
-                || (SQLServerException.DRIVER_ERROR_UNSUPPORTED_CONFIG == e.getDriverErrorCode())
-                // no more time to try again
-                || (SQLServerException.ERROR_SOCKET_TIMEOUT == e.getDriverErrorCode()))
-            return true;
-        else
-            return false;
+        return ((SQLServerException.LOGON_FAILED == errorCode) // logon failed (eg bad password)
+                || (SQLServerException.PASSWORD_EXPIRED == errorCode) // password expired
+                || (SQLServerException.USER_ACCOUNT_LOCKED == errorCode) // user account locked
+                || (SQLServerException.DRIVER_ERROR_INVALID_TDS == driverErrorCode) // invalid TDS from server
+                || (SQLServerException.DRIVER_ERROR_SSL_FAILED == driverErrorCode) // SSL failure
+                || (SQLServerException.DRIVER_ERROR_INTERMITTENT_TLS_FAILED == driverErrorCode) // TLS1.2 failure
+                || (SQLServerException.DRIVER_ERROR_UNSUPPORTED_CONFIG == driverErrorCode)); // unsupported config (eg Sphinx, invalid packet size ,etc)
     }
 
     // reset all params that could have been changed due to ENVCHANGE tokens to defaults,
@@ -3704,7 +3718,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
     }
 
     /**
-     * Get time remaining to timer expiry
+     * Get time remaining to timer expiry (in ms)
      * 
      * @param timerExpire
      * @return remaining time to expiry
@@ -4344,6 +4358,8 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                                     preparedStatementHandleCache.clear();
                                 }
 
+                                this.reconnectListeners.forEach(ReconnectListener::beforeReconnect);
+
                                 if (loggerResiliency.isLoggable(Level.FINE)) {
                                     loggerResiliency.fine(toString()
                                             + " Idle connection resiliency - starting idle connection resiliency reconnect.");
@@ -4795,6 +4811,8 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
         // Clean-up queue etc. related to batching of prepared statement discard actions (sp_unprepare).
         cleanupPreparedStatementDiscardActions();
+
+        ActivityCorrelator.cleanupActivityId();
     }
 
     /**
@@ -4815,6 +4833,8 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                 connectionCommand("IF @@TRANCOUNT > 0 ROLLBACK TRAN", "close connection");
             }
             notifyPooledConnection(null);
+
+            ActivityCorrelator.cleanupActivityId();
 
             if (connectionlogger.isLoggable(Level.FINER)) {
                 connectionlogger.finer(toString() + " Connection closed and returned to connection pool");
@@ -4938,6 +4958,27 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         } finally {
             warningSynchronization.unlock();
         }
+    }
+
+    // Any changes to SQLWarnings should be synchronized.
+    /** Used to add plain SQLWarning messages (if they do not hold extended information, like: ErrorSeverity, ServerName, ProcName etc */
+    void addWarning(SQLWarning sqlWarning) {
+        warningSynchronization.lock();
+        try {
+            if (null == sqlWarnings) {
+                sqlWarnings = sqlWarning;
+            } else {
+                sqlWarnings.setNextWarning(sqlWarning);
+            }
+        } finally {
+            warningSynchronization.unlock();
+        }
+    }
+
+    // Any changes to SQLWarnings should be synchronized.
+    /** Used to add messages that holds extended information, like: ErrorSeverity, ServerName, ProcName etc */
+    void addWarning(ISQLServerMessage sqlServerMessage) {
+        addWarning(new SQLServerWarning(sqlServerMessage.getSQLServerMessage()));
     }
 
     @Override
@@ -5976,7 +6017,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         String user = activeConnectionProperties.getProperty(SQLServerDriverStringProperty.USER.toString());
 
         // No of milliseconds to sleep for the initial back off.
-        int sleepInterval = BACKOFF_INTERVAL;
+        int fedauthSleepInterval = BACKOFF_INTERVAL;
 
         if (!msalContextExists()
                 && !authenticationString.equalsIgnoreCase(SqlAuthentication.ACTIVE_DIRECTORY_INTEGRATED.toString())) {
@@ -6075,7 +6116,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
                         int millisecondsRemaining = timerRemaining(timerExpire);
                         if (ActiveDirectoryAuthentication.GET_ACCESS_TOKEN_TRANSIENT_ERROR != errorCategory
-                                || timerHasExpired(timerExpire) || (sleepInterval >= millisecondsRemaining)) {
+                                || timerHasExpired(timerExpire) || (fedauthSleepInterval >= millisecondsRemaining)) {
 
                             String errorStatus = Integer.toHexString(adalException.getStatus());
 
@@ -6099,13 +6140,14 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
 
                         if (connectionlogger.isLoggable(Level.FINER)) {
                             connectionlogger.fine(toString() + " SQLServerConnection.getFedAuthToken sleeping: "
-                                    + sleepInterval + " milliseconds.");
+                                    + fedauthSleepInterval + " milliseconds.");
                             connectionlogger.fine(toString() + " SQLServerConnection.getFedAuthToken remaining: "
                                     + millisecondsRemaining + " milliseconds.");
                         }
 
-                        sleepForInterval(sleepInterval);
-                        sleepInterval = sleepInterval * 2;
+                        sleepForInterval(fedauthSleepInterval);
+                        fedauthSleepInterval = (fedauthSleepInterval < 500) ? fedauthSleepInterval * 2 : 1000;
+
                     }
                 }
                 // else choose MSAL4J for integrated authentication. This option is supported for both windows and unix,
@@ -8057,6 +8099,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
      * of the implementing class for {@link SQLServerAccessTokenCallback}.
      *
      * @param accessTokenCallbackClass
+     *        access token callback class
      */
     public void setAccessTokenCallbackClass(String accessTokenCallbackClass) {
         this.accessTokenCallbackClass = accessTokenCallbackClass;
@@ -8382,7 +8425,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
             int px = serverName.indexOf('\\');
             String parsedServerName = (px >= 0) ? serverName.substring(0, px) : serverName;
 
-            return AzureSQLServerEndpoints.isAzureSqlServerEndpoint(parsedServerName);
+            return AzureSQLServerEndpoints.isAzureSynapseOnDemandEndpoint(parsedServerName);
         }
 
         return false;
@@ -8507,6 +8550,31 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
     @Override
     public String getIPAddressPreference() {
         return activeConnectionProperties.getProperty(SQLServerDriverStringProperty.IPADDRESS_PREFERENCE.toString());
+    }
+
+    /** Message handler */
+    private transient ISQLServerMessageHandler serverMessageHandler;
+
+    /**
+     * Set current message handler
+     * 
+     * @param messageHandler
+     *        message handler
+     * @return The previously installed message handler (null if none)
+     */
+    @Override
+    public ISQLServerMessageHandler setServerMessageHandler(ISQLServerMessageHandler messageHandler) {
+        ISQLServerMessageHandler installedMessageHandler = this.serverMessageHandler;
+        this.serverMessageHandler = messageHandler;
+        return installedMessageHandler;
+    }
+
+    /**
+     * @return Get Currently installed message handler on the connection
+     */
+    @Override
+    public ISQLServerMessageHandler getServerMessageHandler() {
+        return this.serverMessageHandler;
     }
 }
 

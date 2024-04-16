@@ -63,6 +63,10 @@ public final class TestResource extends ListResourceBundle {
             {"R_ConnectionURLNull", "The connection URL is null."},
             {"R_connectionIsNotClosed", "The connection is not closed."},
             {"R_invalidExceptionMessage", "Invalid exception message"},
+            {"R_invalidClientSecret", "AADSTS7000215: Invalid client secret provided"},
+            {"R_invalidCertFields",
+                    "Error reading certificate, please verify the location of the certificate.signed fields invalid"},
+            {"R_invalidAADAuth", "Failed to authenticate the user {0} in Active Directory (Authentication={1})"},
             {"R_failedValidate", "failed to validate values in $0} "}, {"R_tableNotDropped", "table not dropped. "},
             {"R_connectionReset", "Connection reset"}, {"R_unknownException", "Unknown exception"},
             {"R_deadConnection", "Dead connection should be invalid"},
@@ -212,5 +216,7 @@ public final class TestResource extends ListResourceBundle {
             {"R_failedFedauth", "Failed to acquire fedauth token: "},
             {"R_noLoginModulesConfiguredForJdbcDriver",
                     "javax.security.auth.login.LoginException (No LoginModules configured for SQLJDBCDriver)"},
-            {"R_unexpectedThreadCount", "Thread count is higher than expected."}};
+            {"R_unexpectedThreadCount", "Thread count is higher than expected."},
+            {"R_expectedClassDoesNotMatchActualClass",
+                    "Expected column class {0} does not match actual column class {1} for column {2}."}};
 }

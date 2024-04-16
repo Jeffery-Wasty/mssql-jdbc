@@ -3,26 +3,66 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 
+## [12.7.0] Preview Release
+### Added
+- Server Message Handler and SQLException Chaining [#2251](https://github.com/microsoft/mssql-jdbc/pull/2251)
+- Finish support for RFC4180 for CSV bulk insert operations [#2338](https://github.com/microsoft/mssql-jdbc/pull/2338)
+- Allow constructing a microsoft.sql.DateTimeOffset instance from a java.time.OffsetDateTime value [#2340](https://github.com/microsoft/mssql-jdbc/pull/2340)
+- Added support for TDSType.GUID [#2370](https://github.com/microsoft/mssql-jdbc/pull/2370)
+
+### Changed
+- Remove synchronized from Socket overrides [#2337](https://github.com/microsoft/mssql-jdbc/pull/2337)
+- Default to RMFAIL instead of RMERR [#2348](https://github.com/microsoft/mssql-jdbc/pull/2348)
+
+### Fixed issues
+- Fix to allow connection retries to be disabled by setting connectRetryCount to 0 [#2293](https://github.com/microsoft/mssql-jdbc/pull/2293)
+- Fix to ensure metadata returned follows JDBC data type specs [#2326](https://github.com/microsoft/mssql-jdbc/pull/2326)
+- Added token cache map to fix use of unintended auth token for subsequent connections [#2341](https://github.com/microsoft/mssql-jdbc/pull/2341)
+- Fix calling procedures with output parameters by their four-part syntax [#2349](https://github.com/microsoft/mssql-jdbc/pull/2349)
+- Reset socketTimeout to original value after a successful connection open [#2355](https://github.com/microsoft/mssql-jdbc/pull/2355)
+- Clear prepared statement cache when resetting statement pool connection [#2361](https://github.com/microsoft/mssql-jdbc/pull/2361)
+- Clear prepared statement handle before reconnect [#2364](https://github.com/microsoft/mssql-jdbc/pull/2364)
+- Fixed ClassLoader leak of ActivityCorrelator ThreadLocal [#2366](https://github.com/microsoft/mssql-jdbc/pull/2366)
+- Check if TDSCommand counter is null before incrementing [#2368](https://github.com/microsoft/mssql-jdbc/pull/2368)
+- Escape schema for getProcedures and getProcedureColumns in SQLServerDatabaseMetaData [#2369](https://github.com/microsoft/mssql-jdbc/pull/2369)
+- Fix to properly validate money and small money values for BulkCopy [#2379](https://github.com/microsoft/mssql-jdbc/pull/2379)
+ 
+## [12.6.0] Stable Release
+### Changed
+- Adjusted PreparedStatement cache, so it's cleared before every execute [#2272](https://github.com/microsoft/mssql-jdbc/pull/2272)
+- Updated azure-identity, azure-security-keyvault-keys, bouncycastle, and msal library versions [#2279](https://github.com/microsoft/mssql-jdbc/pull/2279)
+- Changed `socketTimeout` to ensure it's always less than or equal to `loginTimeout` [#2280](https://github.com/microsoft/mssql-jdbc/pull/2280)
+- Change BulkCopy behavior from serializing and deserializing Timestamp objects, to using the objects directly [#2291](https://github.com/microsoft/mssql-jdbc/pull/2291)
+
+### Fixed issues
+- Fixed the way ActivityID was defined and used to be more in line with the behavior of other Microsoft drivers [#2254](https://github.com/microsoft/mssql-jdbc/pull/2254)
+- Fixed missing getters and setters for `useBulkCopyForBatchInsert` [#2277](https://github.com/microsoft/mssql-jdbc/pull/2277)
+- Fixed an issue where, when using the TOP qualifier in a query, the driver returns an error concerning ParameterMetadata [#2287](https://github.com/microsoft/mssql-jdbc/pull/2287)
+- Fixed an issue where insert statements with missing whitespace worked correctly in regular cases, but not when using batch inserts [#2290](https://github.com/microsoft/mssql-jdbc/pull/2290)
+- Fixed timezone not being properly applied to Timestamps when inserted using batch insert with bulkcopy [#2291](https://github.com/microsoft/mssql-jdbc/pull/2291)
+- Fixed locks in IOBuffer to prevent deadlock issues that could arise [#2295](https://github.com/microsoft/mssql-jdbc/pull/2295)
+- Fixed an issue where, when an exception has no cause, the exception itself is passed along instead, preventing it from being lost [#2300](https://github.com/microsoft/mssql-jdbc/pull/2300)
+
 ## [12.5.0] Preview Release
 ### Added
 - Added connection property, `useDefaultJaasConfig`, to allow Kerberos authentication without any additional external configuration [#2147](https://github.com/microsoft/mssql-jdbc/pull/2147)
-- Allow calling of stored procedures directly, simplifying the procedure and improving performance [#2154](https://github.com/microsoft/mssql-jdbc/pull/2154)
+- Allow calling of stored procedures directly through use of new connection property `useFlexibleCallableStatements`, simplifying the procedure and improving performance [#2154](https://github.com/microsoft/mssql-jdbc/pull/2154)
 - Added connection property, `useDefaultGSSCredential`, to allow the driver to create GSSCredential on behalf of a user using Native GSS-API for Kerberos authentication [#2177](https://github.com/microsoft/mssql-jdbc/pull/2177)
 - Added Java 21 support [#2229](https://github.com/microsoft/mssql-jdbc/pull/2229)
-- Added connection property, `calcBigDecimalScale`, to allow the driver to calculate scale and percision from Big Decimal inputs [#2248](https://github.com/microsoft/mssql-jdbc/pull/2248)
+- Added connection property, `calcBigDecimalScale`, to allow the driver to calculate scale and precision from Big Decimal inputs [#2248](https://github.com/microsoft/mssql-jdbc/pull/2248)
 - Added a new named logger for connection open retries and idle connection resiliency reconnects [#2250](https://github.com/microsoft/mssql-jdbc/pull/2250)
 
 ### Changed
-- Changed how IBM JDK is checked for to prevent issues with OSGi environments [#2150](https://github.com/microsoft/mssql-jdbc/pull/2150)
-- Updated azure-security-keyvault-keys, bouncycastle, and h2 library versions [#2162](https://github.com/microsoft/mssql-jdbc/pull/2162)[#2182](https://github.com/microsoft/mssql-jdbc/pull/2182)[#2249](https://github.com/microsoft/mssql-jdbc/pull/2249)
+- Changed how IBM JDK is checked for to prevent issues with OSGi environments [#2150](https://github.com/microsoft/mssql-jdbc/pull/2150)[#2209](https://github.com/microsoft/mssql-jdbc/pull/2209)
+- Updated azure-security-keyvault-keys, bouncycastle, and h2 library versions. As well, Upgraded from `bcprov-jdk15on` and `bcpkix-jdk15on` to `bcprov-jdk18on` and `bcpkix-jdk18on` as the former is no longer being updated [#2162](https://github.com/microsoft/mssql-jdbc/pull/2162)[#2182](https://github.com/microsoft/mssql-jdbc/pull/2182)[#2249](https://github.com/microsoft/mssql-jdbc/pull/2249)
 - Changes to bulkcopy to allow for performance improvements when loading a large number of timestamps [#2194](https://github.com/microsoft/mssql-jdbc/pull/2194)
 - Added additional errors that should translate to RMFAIL [#2201](https://github.com/microsoft/mssql-jdbc/pull/2201)
-- Properly synchronize all calls to MSAL, preventing the driver from making extra calls and providing unneccessary dialogues [#2218](https://github.com/microsoft/mssql-jdbc/pull/2218)
-- Changed driver retry behavior to retry the correct number of times based on connectRetryCount [#2247](https://github.com/microsoft/mssql-jdbc/pull/2247)
+- Properly synchronize all calls to MSAL, preventing the driver from making extra calls and providing unnecessary dialogues [#2218](https://github.com/microsoft/mssql-jdbc/pull/2218)
+- Changed driver retry behavior to retry the correct number of times based on connectRetryCount. These changes were later reverted prior to the 12.6.0 release [#2247](https://github.com/microsoft/mssql-jdbc/pull/2247)[#2267](https://github.com/microsoft/mssql-jdbc/pull/2267)
 
 ### Fixed issues
 - Fix to ignore irrelevant computed columns during bulk insert [#1562](https://github.com/microsoft/mssql-jdbc/pull/1562)
-- Fixed an issue where signature was not properly verfied when using Java Key Store, as well as adding a new API to sign column master key metadata (and return generated signature) for use with Java Key Store and Azure Key Vault [#2160](https://github.com/microsoft/mssql-jdbc/pull/2160)
+- Fixed an issue where signature was not properly verified when using Java Key Store, as well as adding a new API to sign column master key metadata (and return generated signature) for use with Java Key Store and Azure Key Vault [#2160](https://github.com/microsoft/mssql-jdbc/pull/2160)
 - Fixed an issue where a null SQLState was returned when trying to convert a date to a long [#2185](https://github.com/microsoft/mssql-jdbc/pull/2185)
 - Fixed an issue where schemaPattern was not properly being escaped in SQLServerDatabaseMetadata [#2195](https://github.com/microsoft/mssql-jdbc/pull/2195)
 - Fixes getObject()'s erroneous conversion of DateTimeOffset to LocalDateTime [#2204](https://github.com/microsoft/mssql-jdbc/pull/2204)
@@ -89,7 +129,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 - Fixed BigDecimal Precision/Scale issue [2051](https://github.com/microsoft/mssql-jdbc/pull/2051)
 - Fixed NULL state and 0 error code for SQL exceptions [2018](https://github.com/microsoft/mssql-jdbc/pull/2018)
 - Fixed incorrect updateCount [2013](https://github.com/microsoft/mssql-jdbc/pull/2013)
-- Fixed Azure Active Directory user name cache matching to be case insensitive [1923](https://github.com/microsoft/mssql-jdbc/pull/1923)
+- Fixed Azure Active Directory username cache matching to be case insensitive [1923](https://github.com/microsoft/mssql-jdbc/pull/1923)
 - Fixed concurrency issues in encrypt/decrypt obfuscation methods for truststore password [1968](https://github.com/microsoft/mssql-jdbc/pull/1968)
 - Fixed Idle Connection recovery so that unprocessedResponseCount isn't over decremented [1989](https://github.com/microsoft/mssql-jdbc/pull/1989)
 - Fixed race condition connecting to the wrong SQLServer host in configurable IPv6 [1968](https://github.com/microsoft/mssql-jdbc/pull/1968)
@@ -144,7 +184,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 ### Fixed issues
 - Fixed double connection issue when enabling TDS 8.0 and SSL by reusing original socket connection [1817](https://github.com/microsoft/mssql-jdbc/pull/1817)
 - Fixed unknown token error 0xA3 when selectMethod cursor is used with data classification [1821](https://github.com/microsoft/mssql-jdbc/pull/1821)
-- Fixed out of bounds error for when a data classification information type is not provided [1847](https://github.com/microsoft/mssql-jdbc/pull/1847)
+- Fixed out-of-bounds error for when a data classification information type is not provided [1847](https://github.com/microsoft/mssql-jdbc/pull/1847)
 
 
 ## [11.1.1] Preview Release
@@ -207,7 +247,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 ## [9.5.0] Preview Release
 ### Added
 - Idle Connection Resiliency Feature [1669](https://github.com/microsoft/mssql-jdbc/pull/1669)
-- Fix for Bulkcopy multi byte characters in char/vchar columns [1671](https://github.com/microsoft/mssql-jdbc/pull/1671)
+- Fix for Bulkcopy multibyte characters in char/vchar columns [1671](https://github.com/microsoft/mssql-jdbc/pull/1671)
 - Java 17 support [1676](https://github.com/microsoft/mssql-jdbc/pull/1676)
 - Added logging when deriving realm [1672](https://github.com/microsoft/mssql-jdbc/pull/1672)
 - Added check for closed statement to registerColumnEncryptionKeyStoreProvidersOnStatement [1644](https://github.com/microsoft/mssql-jdbc/pull/1644)
@@ -736,12 +776,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 ## [6.3.2] Preview Release
 ### Added
 - Added new connection property: sslProtocol [#422](https://github.com/Microsoft/mssql-jdbc/pull/422)
-- Added "slow" tag to long running tests [#461](https://github.com/Microsoft/mssql-jdbc/pull/461)
+- Added "slow" tag to long-running tests [#461](https://github.com/Microsoft/mssql-jdbc/pull/461)
 
 ### Fixed Issues 
 - Fixed some error messages [#452](https://github.com/Microsoft/mssql-jdbc/pull/452) & [#459](https://github.com/Microsoft/mssql-jdbc/pull/459)
 - Fixed statement leaks [#455](https://github.com/Microsoft/mssql-jdbc/pull/455)
-- Fixed an issue regarding to loginTimeout with TLS [#456](https://github.com/Microsoft/mssql-jdbc/pull/456)
+- Fixed an issue regarding loginTimeout with TLS [#456](https://github.com/Microsoft/mssql-jdbc/pull/456)
 - Fixed sql_variant issue with String type [#442](https://github.com/Microsoft/mssql-jdbc/pull/442)
 - Fixed issue with throwing error message for unsupported datatype [#450](https://github.com/Microsoft/mssql-jdbc/pull/450)
 - Fixed issue that initial batchException was not thrown [#458](https://github.com/Microsoft/mssql-jdbc/pull/458)

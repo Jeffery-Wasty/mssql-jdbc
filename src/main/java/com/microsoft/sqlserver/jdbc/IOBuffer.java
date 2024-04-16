@@ -57,6 +57,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 import java.util.TimeZone;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -672,7 +673,7 @@ final class TDSChannel implements Serializable {
     int numMsgsSent = 0;
     int numMsgsRcvd = 0;
 
-    private final transient Lock lock = new ReentrantLock();
+    private final transient Lock tdsChannelLock = new ReentrantLock();
 
     // Last SPID received from the server. Used for logging and to tag subsequent outgoing
     // packets to facilitate diagnosing problems from the server side.
@@ -773,7 +774,7 @@ final class TDSChannel implements Serializable {
             logger.finer(toString() + " Disabling SSL...");
         }
 
-        lock.lock();
+        tdsChannelLock.lock();
         try {
             // Guard in case of disableSSL being called before enableSSL
             if (proxySocket == null) {
@@ -839,7 +840,7 @@ final class TDSChannel implements Serializable {
             channelSocket = tcpSocket;
             sslSocket = null;
         } finally {
-            lock.unlock();
+            tdsChannelLock.unlock();
         }
 
         if (logger.isLoggable(Level.FINER))
@@ -1056,6 +1057,8 @@ final class TDSChannel implements Serializable {
     private final class ProxyInputStream extends InputStream {
         private InputStream filteredStream;
 
+        private final Lock proxyInputStreamLock = new ReentrantLock();
+
         /**
          * Bytes that have been read by a poll(s).
          */
@@ -1082,7 +1085,7 @@ final class TDSChannel implements Serializable {
          *         If an I/O exception occurs.
          */
         public boolean poll() {
-            lock.lock();
+            proxyInputStreamLock.lock();
             try {
                 int b;
                 try {
@@ -1117,7 +1120,7 @@ final class TDSChannel implements Serializable {
 
                 return true;
             } finally {
-                lock.unlock();
+                proxyInputStreamLock.unlock();
             }
         }
 
@@ -1133,7 +1136,7 @@ final class TDSChannel implements Serializable {
 
         @Override
         public long skip(long n) throws IOException {
-            lock.lock();
+            proxyInputStreamLock.lock();
             try {
                 long bytesSkipped = 0;
 
@@ -1154,7 +1157,7 @@ final class TDSChannel implements Serializable {
 
                 return bytesSkipped;
             } finally {
-                lock.unlock();
+                proxyInputStreamLock.unlock();
             }
         }
 
@@ -1191,7 +1194,7 @@ final class TDSChannel implements Serializable {
         }
 
         private int readInternal(byte[] b, int offset, int maxBytes) throws IOException {
-            lock.lock();
+            proxyInputStreamLock.lock();
             try {
                 int bytesRead;
 
@@ -1240,7 +1243,7 @@ final class TDSChannel implements Serializable {
 
                 return bytesRead;
             } finally {
-                lock.unlock();
+                proxyInputStreamLock.unlock();
             }
         }
 
@@ -1259,11 +1262,11 @@ final class TDSChannel implements Serializable {
             if (logger.isLoggable(Level.FINEST))
                 logger.finest(super.toString() + " Marking next " + readLimit + " bytes");
 
-            lock.lock();
+            proxyInputStreamLock.lock();
             try {
                 filteredStream.mark(readLimit);
             } finally {
-                lock.unlock();
+                proxyInputStreamLock.unlock();
             }
         }
 
@@ -1272,12 +1275,12 @@ final class TDSChannel implements Serializable {
             if (logger.isLoggable(Level.FINEST))
                 logger.finest(super.toString() + " Resetting to previous mark");
 
-            lock.lock();
+            proxyInputStreamLock.lock();
             try {
 
                 filteredStream.reset();
             } finally {
-                lock.unlock();
+                proxyInputStreamLock.unlock();
             }
         }
 
@@ -1438,7 +1441,7 @@ final class TDSChannel implements Serializable {
         }
 
         @Override
-        public synchronized int getReceiveBufferSize() throws SocketException {
+        public int getReceiveBufferSize() throws SocketException {
             return tdsChannel.tcpSocket.getReceiveBufferSize();
         }
 
@@ -1453,7 +1456,7 @@ final class TDSChannel implements Serializable {
         }
 
         @Override
-        public synchronized int getSendBufferSize() throws SocketException {
+        public int getSendBufferSize() throws SocketException {
             return tdsChannel.tcpSocket.getSendBufferSize();
         }
 
@@ -1463,7 +1466,7 @@ final class TDSChannel implements Serializable {
         }
 
         @Override
-        public synchronized int getSoTimeout() throws SocketException {
+        public int getSoTimeout() throws SocketException {
             return tdsChannel.tcpSocket.getSoTimeout();
         }
 
@@ -1534,19 +1537,19 @@ final class TDSChannel implements Serializable {
         // Ignore calls to methods that would otherwise allow the SSL socket
         // to directly manipulate the underlying TCP socket
         @Override
-        public synchronized void close() throws IOException {
+        public void close() throws IOException {
             if (logger.isLoggable(Level.FINER))
                 logger.finer(logContext + " Ignoring close");
         }
 
         @Override
-        public synchronized void setReceiveBufferSize(int size) throws SocketException {
+        public void setReceiveBufferSize(int size) throws SocketException {
             if (logger.isLoggable(Level.FINER))
                 logger.finer(toString() + " Ignoring setReceiveBufferSize size:" + size);
         }
 
         @Override
-        public synchronized void setSendBufferSize(int size) throws SocketException {
+        public void setSendBufferSize(int size) throws SocketException {
             if (logger.isLoggable(Level.FINER))
                 logger.finer(toString() + " Ignoring setSendBufferSize size:" + size);
         }
@@ -1564,7 +1567,7 @@ final class TDSChannel implements Serializable {
         }
 
         @Override
-        public synchronized void setSoTimeout(int timeout) throws SocketException {
+        public void setSoTimeout(int timeout) throws SocketException {
             tdsChannel.tcpSocket.setSoTimeout(timeout);
         }
 
@@ -2363,6 +2366,10 @@ final class TDSChannel implements Serializable {
      */
     final void setNetworkTimeout(int timeout) throws IOException {
         tcpSocket.setSoTimeout(timeout);
+    }
+
+    void resetTcpSocketTimeout() throws SocketException {
+        this.tcpSocket.setSoTimeout(con.getSocketTimeoutMilliseconds());
     }
 }
 
@@ -3823,6 +3830,20 @@ final class TDSWriter {
                 SSType.DATE);
     }
 
+    void writeDate(long utcMillis, Calendar cal) throws SQLServerException {
+        GregorianCalendar calendar = initializeCalender(TimeZone.getDefault());
+
+        // Load the calendar with the desired value
+        calendar.setTimeInMillis(utcMillis);
+        if (cal != null) {
+            calendar.setTimeZone(cal.getTimeZone());
+        }
+
+        writeScaledTemporal(calendar, 0, // subsecond nanos (none for a date value)
+                0, // scale (dates are not scaled)
+                SSType.DATE);
+    }
+
     void writeTime(java.sql.Timestamp value, int scale) throws SQLServerException {
         GregorianCalendar calendar = initializeCalender(TimeZone.getDefault());
         long utcMillis; // Value to which the calendar is to be set (in milliseconds 1/1/1970 00:00:00 GMT)
@@ -3832,6 +3853,20 @@ final class TDSWriter {
 
         // Load the calendar with the desired value
         calendar.setTimeInMillis(utcMillis);
+
+        writeScaledTemporal(calendar, subSecondNanos, scale, SSType.TIME);
+    }
+
+    void writeTime(java.sql.Timestamp value, int scale, Calendar cal) throws SQLServerException {
+        GregorianCalendar calendar = initializeCalender(TimeZone.getDefault());
+        long utcMillis = value.getTime(); // Value to which the calendar is to be set (in milliseconds 1/1/1970 00:00:00 GMT)
+        int subSecondNanos = value.getNanos();
+
+        // Load the calendar with the desired value
+        calendar.setTimeInMillis(utcMillis);
+        if (cal != null) {
+            calendar.setTimeZone(cal.getTimeZone());
+        }
 
         writeScaledTemporal(calendar, subSecondNanos, scale, SSType.TIME);
     }
@@ -4752,6 +4787,32 @@ final class TDSWriter {
 
         byte[] val = DDC.convertBigDecimalToBytes(bdValue, nScale);
         writeBytes(val, 0, val.length);
+    }
+
+    /**
+     * Append a UUID in RPC transmission format.
+     *
+     * @param sName
+     *        the optional parameter name
+     * @param uuidValue
+     *        the data value
+     * @param bOut
+     *        boolean true if the data value is being registered as an output parameter
+     */
+    void writeRPCUUID(String sName, UUID uuidValue, boolean bOut) throws SQLServerException {
+        writeRPCNameValType(sName, bOut, TDSType.GUID);
+
+        if (uuidValue == null) {
+            writeByte((byte) 0);
+            writeByte((byte) 0);
+
+        } else {
+            writeByte((byte) 0x10); // maximum length = 16
+            writeByte((byte) 0x10); // length = 16
+
+            byte[] val = Util.asGuidByteArray(uuidValue);
+            writeBytes(val, 0, val.length);
+        }
     }
 
     /**
@@ -6688,7 +6749,7 @@ final class TDSReader implements Serializable {
     private boolean serverSupportsColumnEncryption = false;
     private boolean serverSupportsDataClassification = false;
     private byte serverSupportedDataClassificationVersion = TDS.DATA_CLASSIFICATION_NOT_ENABLED;
-    private final transient Lock lock = new ReentrantLock();
+    private final transient Lock tdsReaderLock = new ReentrantLock();
 
     private final byte[] valueBytes = new byte[256];
 
@@ -6808,7 +6869,7 @@ final class TDSReader implements Serializable {
      * the response and another thread that is trying to buffer it with TDSCommand.detach().
      */
     final boolean readPacket() throws SQLServerException {
-        lock.lock();
+        tdsReaderLock.lock();
         try {
             if (null != command && !command.readingResponse())
                 return false;
@@ -6882,6 +6943,11 @@ final class TDSReader implements Serializable {
 
             // if messageType is RPC or QUERY, then increment Counter's state
             if (tdsChannel.getWriter().checkIfTdsMessageTypeIsBatchOrRPC() && null != command) {
+                if (null == command.getCounter()) {
+                    MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_NullValue"));
+                    Object[] msgArgs1 = {"TDS command counter"};
+                    throw new SQLServerException(form.format(msgArgs1), null);
+                }
                 command.getCounter().increaseCounter(packetLength);
             }
 
@@ -6921,7 +6987,7 @@ final class TDSReader implements Serializable {
 
             return true;
         } finally {
-            lock.unlock();
+            tdsReaderLock.unlock();
         }
     }
 

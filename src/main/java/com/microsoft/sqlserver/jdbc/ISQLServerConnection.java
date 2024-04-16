@@ -479,8 +479,28 @@ public interface ISQLServerConnection extends java.sql.Connection {
      * of the implementing class for {@link SQLServerAccessTokenCallback}.
      *
      * @param accessTokenCallbackClass
+     *        access token callback class
      */
     void setAccessTokenCallbackClass(String accessTokenCallbackClass);
+
+    /**
+     * Get Currently installed message handler on the connection
+     * 
+     * @see ISQLServerMessageHandler#messageHandler(ISQLServerMessage)
+     * @return ISQLServerMessageHandler
+     */
+    ISQLServerMessageHandler getServerMessageHandler();
+
+    /**
+     * Set message handler on the connection
+     * 
+     * @param messageHandler
+     *        message handler
+     * 
+     * @see ISQLServerMessageHandler#messageHandler(ISQLServerMessage)
+     * @return ISQLServerMessageHandler
+     */
+    ISQLServerMessageHandler setServerMessageHandler(ISQLServerMessageHandler messageHandler);
 
     /**
      * Returns the current flag for calcBigDecimalPrecision.
@@ -498,14 +518,14 @@ public interface ISQLServerConnection extends java.sql.Connection {
      */
     void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision);
 
-     /**
+    /**
      * Specifies the flag for using Bulk Copy API for batch insert operations.
      * 
      * @param useBulkCopyForBatchInsert
      *        boolean value for useBulkCopyForBatchInsert.
      */
-    void setUseBulkCopyForBatchInsert(boolean useBulkCopyForBatchInsert) ;
-    
+    void setUseBulkCopyForBatchInsert(boolean useBulkCopyForBatchInsert);
+
     /**
      * Returns the useBulkCopyForBatchInsert value.
      * 

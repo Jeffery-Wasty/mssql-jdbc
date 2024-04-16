@@ -81,7 +81,7 @@ public class CallableStatementTest extends AbstractTest {
 
     /**
      * Setup before test
-     * 
+     *
      * @throws SQLException
      */
     @BeforeAll
@@ -201,7 +201,7 @@ public class CallableStatementTest extends AbstractTest {
 
     /**
      * Tests CallableStatement.getString() with uniqueidentifier parameter
-     * 
+     *
      * @throws SQLException
      */
     @Test
@@ -226,7 +226,7 @@ public class CallableStatementTest extends AbstractTest {
 
     /**
      * test for setNull(index, varchar) to behave as setNull(index, nvarchar) when SendStringParametersAsUnicode is true
-     * 
+     *
      * @throws SQLException
      */
     @Test
@@ -302,7 +302,7 @@ public class CallableStatementTest extends AbstractTest {
 
     /**
      * Tests getObject(n, java.time.OffsetDateTime.class) and getObject(n, java.time.OffsetTime.class).
-     * 
+     *
      * @throws SQLException
      */
     @Test
@@ -332,7 +332,7 @@ public class CallableStatementTest extends AbstractTest {
 
     /**
      * recognize parameter names with and without leading '@'
-     * 
+     *
      * @throws SQLException
      */
     @Test
@@ -1067,9 +1067,158 @@ public class CallableStatementTest extends AbstractTest {
         }
     }
 
+    @Test
+    public void testExecuteSystemStoredProcedureNamedParametersAndIndexedParameterNoResultset() throws SQLException {
+        String call0 = "EXEC sp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call1 = "\rEXEC\r\rsp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call2 = "  EXEC   sp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call3 = "\tEXEC\t\t\tsp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+
+        try (CallableStatement cstmt0 = connection.prepareCall(call0);
+                CallableStatement cstmt1 = connection.prepareCall(call1);
+                CallableStatement cstmt2 = connection.prepareCall(call2);
+                CallableStatement cstmt3 = connection.prepareCall(call3);) {
+            cstmt0.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt0.execute();
+
+            cstmt1.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt1.execute();
+
+            cstmt2.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt2.execute();
+
+            cstmt3.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt3.execute();
+        }
+    }
+
+    @Test
+    public void testExecSystemStoredProcedureNamedParametersAndIndexedParameterResultSet() throws SQLException {
+        String call = "exec sp_sproc_columns_100 ?, @ODBCVer=3, @fUsePattern=0";
+
+        try (CallableStatement cstmt = connection.prepareCall(call)) {
+            cstmt.setString(1, "sp_getapplock");
+
+            try (ResultSet rs = cstmt.executeQuery()) {
+                while (rs.next()) {
+                    assertTrue(TestResource.getResource("R_resultSetEmpty"), !rs.getString(4).isEmpty());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testExecSystemStoredProcedureNoIndexedParametersResultSet() throws SQLException {
+        String call = "execute sp_sproc_columns_100 sp_getapplock, @ODBCVer=3, @fUsePattern=0";
+
+        try (CallableStatement cstmt = connection.prepareCall(call); ResultSet rs = cstmt.executeQuery()) {
+            while (rs.next()) {
+                assertTrue(TestResource.getResource("R_resultSetEmpty"), !rs.getString(4).isEmpty());
+            }
+        }
+    }
+
+    @Test
+    public void testExecDocumentedSystemStoredProceduresIndexedParameters() throws SQLException {
+        String serverName;
+        String testTableName = "testTable";
+        Integer integer = new Integer(1);
+
+        try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery("SELECT @@SERVERNAME")) {
+            rs.next();
+            serverName = rs.getString(1);
+        }
+
+        String[] sprocs = {"EXEC sp_column_privileges ?", "exec sp_catalogs ?", "execute sp_column_privileges ?",
+                "EXEC sp_column_privileges_ex ?", "EXECUTE sp_columns ?", "execute sp_datatype_info ?",
+                "EXEC sp_sproc_columns ?", "EXECUTE sp_server_info ?", "exec sp_special_columns ?",
+                "execute sp_statistics ?", "EXEC sp_table_privileges ?", "exec sp_tables ?"};
+
+        Object[] params = {testTableName, serverName, testTableName, serverName, testTableName, integer,
+                "sp_column_privileges", integer, testTableName, testTableName, testTableName, testTableName};
+
+        int paramIndex = 0;
+
+        for (String sproc : sprocs) {
+            try (CallableStatement cstmt = connection.prepareCall(sproc)) {
+                cstmt.setObject(1, params[paramIndex]);
+                cstmt.execute();
+                paramIndex++;
+            } catch (Exception e) {
+                fail("Failed executing '" + sproc + "' with indexed parameter '" + params[paramIndex]);
+            }
+        }
+    }
+
+    @Test
+    @Tag(Constants.reqExternalSetup)
+    @Tag(Constants.xAzureSQLDB)
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLMI)
+    public void testFourPartSyntaxCallEscapeSyntax() throws SQLException {
+        String table = "serverList";
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("IF OBJECT_ID(N'" + table + "') IS NOT NULL DROP TABLE " + table);
+            stmt.execute("CREATE TABLE " + table
+                    + " (serverName varchar(100),network varchar(100),serverStatus varchar(4000), id int, collation varchar(100), connectTimeout int, queryTimeout int)");
+            stmt.execute("INSERT " + table + " EXEC sp_helpserver");
+
+            ResultSet rs = stmt
+                    .executeQuery("SELECT COUNT(*) FROM " + table + " WHERE serverName = N'" + linkedServer + "'");
+            rs.next();
+
+            if (rs.getInt(1) == 1) {
+                stmt.execute("EXEC sp_dropserver @server='" + linkedServer + "';");
+            }
+
+            stmt.execute("EXEC sp_addlinkedserver @server='" + linkedServer + "';");
+            stmt.execute("EXEC sp_addlinkedsrvlogin @rmtsrvname=N'" + linkedServer + "', @rmtuser=N'" + remoteUser
+                    + "', @rmtpassword=N'" + remotePassword + "'");
+            stmt.execute("EXEC sp_serveroption '" + linkedServer + "', 'rpc', true;");
+            stmt.execute("EXEC sp_serveroption '" + linkedServer + "', 'rpc out', true;");
+        }
+
+        SQLServerDataSource ds = new SQLServerDataSource();
+        ds.setServerName(linkedServer);
+        ds.setUser(remoteUser);
+        ds.setPassword(remotePassword);
+        ds.setEncrypt(false);
+        ds.setTrustServerCertificate(true);
+
+        try (Connection linkedServerConnection = ds.getConnection();
+                Statement stmt = linkedServerConnection.createStatement()) {
+            stmt.execute(
+                    "create or alter procedure dbo.TestAdd(@Num1 int, @Num2 int, @Result int output) as begin set @Result = @Num1 + @Num2; end;");
+        }
+
+        try (CallableStatement cstmt = connection
+                .prepareCall("{call [" + linkedServer + "].master.dbo.TestAdd(?,?,?)}")) {
+            int sum = 11;
+            int param0 = 1;
+            int param1 = 10;
+            cstmt.setInt(1, param0);
+            cstmt.setInt(2, param1);
+            cstmt.registerOutParameter(3, Types.INTEGER);
+            cstmt.execute();
+            assertEquals(sum, cstmt.getInt(3));
+        }
+
+        try (CallableStatement cstmt = connection.prepareCall("exec [" + linkedServer + "].master.dbo.TestAdd ?,?,?")) {
+            int sum = 11;
+            int param0 = 1;
+            int param1 = 10;
+            cstmt.setInt(1, param0);
+            cstmt.setInt(2, param1);
+            cstmt.registerOutParameter(3, Types.INTEGER);
+            cstmt.execute();
+            assertEquals(sum, cstmt.getInt(3));
+        }
+    }
+
     /**
      * Cleanup after test
-     * 
+     *
      * @throws SQLException
      */
     @AfterAll

@@ -164,6 +164,22 @@ public class SQLServerColumnEncryptionJavaKeyStoreProvider extends SQLServerColu
         return isValid;
     }
 
+    /**
+     * Sign column master key metadata
+     * 
+     * @param masterKeyPath
+     *        master key path
+     * 
+     * @param allowEnclaveComputations
+     *        flag whether to allow enclave computations
+     * 
+     * @return
+     *         column master key metadata
+     * 
+     * @throws SQLServerException
+     *         when an error occurs
+     * 
+     */
     public byte[] signColumnMasterKeyMetadata(String masterKeyPath,
             boolean allowEnclaveComputations) throws SQLServerException {
         if (!allowEnclaveComputations)
@@ -390,22 +406,5 @@ public class SQLServerColumnEncryptionJavaKeyStoreProvider extends SQLServerColu
         ByteBuffer byteBuffer = ByteBuffer.allocate(2);
         byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
         return byteBuffer.putShort(value).array();
-    }
-
-    /*
-     * Verify signature against certificate
-     */
-    private boolean rsaVerifySignature(byte[] dataToVerify, byte[] signature,
-            CertificateDetails certificateDetails) throws InvalidKeyException, NoSuchAlgorithmException, SignatureException {
-        Signature sig = Signature.getInstance("SHA256withRSA");
-
-        sig.initSign((PrivateKey) certificateDetails.privateKey);
-        sig.update(dataToVerify);
-
-        byte[] signedHash = sig.sign();
-
-        sig.initVerify(certificateDetails.certificate.getPublicKey());
-        sig.update(dataToVerify);
-        return sig.verify(signature);
     }
 }

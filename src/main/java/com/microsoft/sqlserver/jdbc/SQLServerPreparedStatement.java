@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
 
 import com.microsoft.sqlserver.jdbc.SQLServerConnection.CityHash128Key;
 import com.microsoft.sqlserver.jdbc.SQLServerConnection.PreparedStatementHandle;
@@ -69,6 +70,15 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
 
     /** Processed SQL statement text, may not be same as what user initially passed. */
     final String userSQL;
+
+    // flag whether is exec escape syntax
+    private boolean isExecEscapeSyntax;
+
+    // flag whether is call escape syntax
+    private boolean isCallEscapeSyntax;
+
+    // flag whether is four part syntax
+    private boolean isFourPartSyntax;
 
     /** Parameter positions in processed SQL statement text. */
     final int[] userSQLParamPositions;
@@ -127,6 +137,22 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
      * boolean value for deciding if the driver should use bulk copy API for batch inserts
      */
     private boolean useBulkCopyForBatchInsert;
+
+    /**
+     * Regex for JDBC 'call' escape syntax
+     */
+    private static final Pattern callEscapePattern = Pattern
+            .compile("^\\s*(?i)\\{(\\s*\\??\\s*=?\\s*)call (.+)\\s*\\(?\\?*,?\\)?\\s*}\\s*$");
+
+    /**
+     * Regex for 'exec' escape syntax
+     */
+    private static final Pattern execEscapePattern = Pattern.compile("^\\s*(?i)(?:exec|execute)\\b");
+
+    /**
+     * Regex for four part syntax
+     */
+    private static final Pattern fourPartSyntaxPattern = Pattern.compile("(.+)\\.(.+)\\.(.+)\\.(.+)");
 
     /** Returns the prepared statement SQL */
     @Override
@@ -209,6 +235,12 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
     private Vector<CryptoMetadata> cryptoMetaBatch = new Vector<>();
 
     /**
+     * Listener to clear the {@link SQLServerPreparedStatement#prepStmtHandle} and
+     * {@link SQLServerPreparedStatement#cachedPreparedStatementHandle} before reconnecting.
+     */
+    private ReconnectListener clearPrepStmtHandleOnReconnectListener;
+
+    /**
      * Constructs a SQLServerPreparedStatement.
      * 
      * @param conn
@@ -227,6 +259,9 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
     SQLServerPreparedStatement(SQLServerConnection conn, String sql, int nRSType, int nRSConcur,
             SQLServerStatementColumnEncryptionSetting stmtColEncSetting) throws SQLServerException {
         super(conn, nRSType, nRSConcur, stmtColEncSetting);
+
+        clearPrepStmtHandleOnReconnectListener = this::clearPrepStmtHandle;
+        connection.registerBeforeReconnectListener(clearPrepStmtHandleOnReconnectListener);
 
         if (null == sql) {
             MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_NullValue"));
@@ -253,6 +288,9 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
         procedureName = parsedSQL.procedureName;
         bReturnValueSyntax = parsedSQL.bReturnValueSyntax;
         userSQL = parsedSQL.processedSQL;
+        isExecEscapeSyntax = isExecEscapeSyntax(sql);
+        isCallEscapeSyntax = isCallEscapeSyntax(sql);
+        isFourPartSyntax = isFourPartSyntax(sql);
         userSQLParamPositions = parsedSQL.parameterPositions;
         initParams(userSQLParamPositions.length);
         useBulkCopyForBatchInsert = conn.getUseBulkCopyForBatchInsert();
@@ -262,6 +300,8 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
      * Closes the prepared statement's prepared handle.
      */
     private void closePreparedHandle() {
+        connection.removeBeforeReconnectListener(clearPrepStmtHandleOnReconnectListener);
+
         if (!hasPreparedStatementHandle())
             return;
 
@@ -487,6 +527,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE_QUERY));
         loggerExternal.exiting(getClassNameLogging(), "executeQuery");
         return resultSet;
@@ -501,6 +542,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
      */
     final java.sql.ResultSet executeQueryInternal() throws SQLServerException, SQLTimeoutException {
         checkClosed();
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE_QUERY_INTERNAL));
         return resultSet;
     }
@@ -513,7 +555,8 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
         }
 
         checkClosed();
-        connection.unprepareUnreferencedPreparedStatementHandles(true);
+
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE_UPDATE));
 
         // this shouldn't happen, caller probably meant to call executeLargeUpdate
@@ -534,7 +577,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
-        connection.unprepareUnreferencedPreparedStatementHandles(true);
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE_UPDATE));
         loggerExternal.exiting(getClassNameLogging(), "executeLargeUpdate", updateCount);
         return updateCount;
@@ -547,7 +590,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
-        connection.unprepareUnreferencedPreparedStatementHandles(true);
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE));
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
         return null != resultSet;
@@ -1208,7 +1251,18 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
      */
     boolean callRPCDirectly(Parameter[] params) throws SQLServerException {
         int paramCount = SQLServerConnection.countParams(userSQL);
-        return (null != procedureName && paramCount != 0 && !isTVPType(params));
+
+        // In order to execute sprocs directly the following must be true:
+        // 1. There must be a sproc name
+        // 2. There must be parameters
+        // 3. Parameters must not be a TVP type
+        // 4. Compliant CALL escape syntax
+        // If isExecEscapeSyntax is true, EXEC escape syntax is used then use prior behaviour of
+        // wrapping call to execute the procedure
+        // If isFourPartSyntax is true, sproc is being executed against linked server, then
+        // use prior behaviour of wrapping call to execute procedure
+        return (null != procedureName && paramCount != 0 && !isTVPType(params) && isCallEscapeSyntax
+                && !isExecEscapeSyntax && !isFourPartSyntax);
     }
 
     /**
@@ -1226,6 +1280,18 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             }
         }
         return false;
+    }
+
+    private boolean isExecEscapeSyntax(String sql) {
+        return execEscapePattern.matcher(sql).find();
+    }
+
+    private boolean isCallEscapeSyntax(String sql) {
+        return callEscapePattern.matcher(sql).find();
+    }
+
+    private boolean isFourPartSyntax(String sql) {
+        return fourPartSyntaxPattern.matcher(sql).find();
     }
 
     /**
@@ -2201,7 +2267,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
-        connection.unprepareUnreferencedPreparedStatementHandles(true);
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         discardLastExecutionResults();
 
         try {
@@ -2385,6 +2451,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
+        connection.unprepareUnreferencedPreparedStatementHandles(false);
         discardLastExecutionResults();
 
         try {
@@ -3419,6 +3486,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
             loggerExternal.entering(getClassNameLogging(), "setTimestamp", new Object[] {n, x, cal});
         checkClosed();
+
         setValue(n, JDBCType.TIMESTAMP, x, JavaType.TIMESTAMP, cal, false);
         loggerExternal.exiting(getClassNameLogging(), "setTimestamp");
     }
@@ -3430,6 +3498,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
             loggerExternal.entering(getClassNameLogging(), "setTimestamp", new Object[] {n, x, cal, forceEncrypt});
         checkClosed();
+
         setValue(n, JDBCType.TIMESTAMP, x, JavaType.TIMESTAMP, cal, forceEncrypt);
         loggerExternal.exiting(getClassNameLogging(), "setTimestamp");
     }
@@ -3528,5 +3597,13 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
                 SQLServerException.getErrString("R_cannotTakeArgumentsPreparedOrCallable"));
         Object[] msgArgs = {"addBatch()"};
         throw new SQLServerException(this, form.format(msgArgs), null, 0, false);
+    }
+
+    private void clearPrepStmtHandle() {
+        prepStmtHandle = 0;
+        cachedPreparedStatementHandle = null;
+        if (getStatementLogger().isLoggable(Level.FINER)) {
+            getStatementLogger().finer(toString() + " cleared cachedPrepStmtHandle!");
+        }
     }
 }

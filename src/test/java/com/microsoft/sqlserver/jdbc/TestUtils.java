@@ -238,6 +238,15 @@ public final class TestUtils {
     }
 
     /**
+     * Checks if connection is established to Azure Synapse OnDemand server
+     * 
+     */
+    public static boolean isAzureSynapseOnDemand(Connection con) {
+        isAzure(con);
+        return ((SQLServerConnection) con).isAzureSynapseOnDemandEndpoint();
+    }
+
+    /**
      * Checks if connection is established to server that supports AEv2.
      * 
      * @see com.microsoft.sqlserver.jdbc.SQLServerConnection#isAEv2()
@@ -408,6 +417,18 @@ public final class TestUtils {
      */
     public static void dropTableIfExists(String tableName, java.sql.Statement stmt) throws SQLException {
         dropObjectIfExists(tableName, "U", stmt);
+    }
+
+    public static void dropTableWithSchemaIfExists(String tableNameWithSchema,
+            java.sql.Statement stmt) throws SQLException {
+        stmt.execute(
+                "IF OBJECT_ID('" + tableNameWithSchema + "', 'U') IS NOT NULL DROP TABLE " + tableNameWithSchema + ";");
+    }
+
+    public static void dropProcedureWithSchemaIfExists(String procedureWithSchema,
+            java.sql.Statement stmt) throws SQLException {
+        stmt.execute("IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'" + procedureWithSchema
+                + "') AND type in (N'P', N'PC')) DROP PROCEDURE " + procedureWithSchema + ";");
     }
 
     /**
