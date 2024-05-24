@@ -212,11 +212,14 @@ public final class TestResource extends ListResourceBundle {
             {"R_objectNullOrEmpty", "The {0} is null or empty."},
             {"R_cekDecryptionFailed", "Failed to decrypt a column encryption key using key store provider: {0}."},
             {"R_connectTimedOut", "connect timed out"},
+            {"R_sharedTimerStopOnNoRef", "SharedTimer should be stopped after all references are removed."},
             {"R_sessionKilled", "Cannot continue the execution because the session is in the kill state"},
             {"R_failedFedauth", "Failed to acquire fedauth token: "},
             {"R_noLoginModulesConfiguredForJdbcDriver",
                     "javax.security.auth.login.LoginException (No LoginModules configured for SQLJDBCDriver)"},
             {"R_unexpectedThreadCount", "Thread count is higher than expected."},
             {"R_expectedClassDoesNotMatchActualClass",
-                    "Expected column class {0} does not match actual column class {1} for column {2}."}};
+                    "Expected column class {0} does not match actual column class {1} for column {2}."},
+            {"R_loginFailedMI", "Login failed for user '<token-identified principal>'"},
+            {"R_MInotAvailable", "Managed Identity authentication is not available"},};
 }
