@@ -252,19 +252,6 @@ public class SQLServerDataSource
     }
 
     @Override
-    public void setUseFlexibleCallableStatements(boolean enable) {
-        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.toString(),
-                enable);
-    }
-
-    @Override
-    public boolean getUseFlexibleCallableStatements() {
-        return getBooleanProperty(connectionProps,
-                SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.toString(),
-                SQLServerDriverBooleanProperty.USE_FLEXIBLE_CALLABLE_STATEMENTS.getDefaultValue());
-    }
-
-    @Override
     public void setAccessToken(String accessToken) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.ACCESS_TOKEN.toString(), accessToken);
     }
@@ -960,6 +947,21 @@ public class SQLServerDataSource
     }
 
     @Override
+    public void setcacheBulkCopyMetadata(boolean cacheBulkCopyMetadata) {
+        setBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE.toString(),
+                cacheBulkCopyMetadata);
+    }
+
+    @Override
+    public boolean getcacheBulkCopyMetadata() {
+        boolean defaultValue = SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE
+                .getDefaultValue();
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE.toString(), defaultValue);
+    }
+
+    @Override
     public void setServerPreparedStatementDiscardThreshold(int serverPreparedStatementDiscardThreshold) {
         setIntProperty(connectionProps,
                 SQLServerDriverIntProperty.SERVER_PREPARED_STATEMENT_DISCARD_THRESHOLD.toString(),
@@ -1291,6 +1293,23 @@ public class SQLServerDataSource
     @Override
     public int getMsiTokenCacheTtl() {
         return 0;
+    }
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed.
+     * This method is a no-op for backwards compatibility only.
+     */
+    @Override
+    public void setUseFlexibleCallableStatements(boolean enable) {}
+
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed.
+     * This method is a no-op for backwards compatibility only.
+     */
+    @Override
+    public boolean getUseFlexibleCallableStatements() {
+        return true;
     }
 
     /**

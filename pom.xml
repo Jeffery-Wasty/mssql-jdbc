@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>12.7.1-SNAPSHOT</version>
+	<version>12.9.0</version>
 	<packaging>jar</packaging>
 	<name>Microsoft JDBC Driver for SQL Server</name>
 	<description>
@@ -225,6 +225,30 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+	<repositories>
+		<repository>
+			<id>central</id>
+			<url>https://sqlclientdrivers.pkgs.visualstudio.com/public/_packaging/mssql-jdbc/maven/v1</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+	<pluginRepositories>
+		<pluginRepository>
+			<id>central</id>
+			<url>https://sqlclientdrivers.pkgs.visualstudio.com/public/_packaging/mssql-jdbc/maven/v1</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</pluginRepository>
+	</pluginRepositories>
 	<profiles>
 		<profile>
 			<id>jre8</id>
@@ -347,9 +371,6 @@
 		</profile>
 		<profile>
 			<id>jre21</id>
-			<activation>
-				<activeByDefault>true</activeByDefault>
-			</activation>
 			<build>
 				<finalName>${project.artifactId}-${project.version}.jre21${releaseExt}</finalName>
 				<plugins>
