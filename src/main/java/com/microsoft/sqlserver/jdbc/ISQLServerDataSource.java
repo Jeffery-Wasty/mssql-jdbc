@@ -1346,6 +1346,38 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
      * @return cacheBulkCopyMetadata boolean value
      */
     boolean getcacheBulkCopyMetadata();
+  
+   /**
+     * Returns value of 'retryExec' from Connection String.
+     *
+     * @param retryExec
+     *        Set of rules used for statement (execution) retry
+     */
+    void setRetryExec(String retryExec);
+
+    /**
+     * Sets the value for 'retryExec' property
+     *
+     * @return retryExec
+     *         String value
+     */
+    String getRetryExec();
+
+    /**
+     * Returns value of 'retryConn' from Connection String.
+     *
+     * @param retryConn
+     *          Set of rules used for connection retry
+     */
+    void setRetryConn(String retryConn);
+
+    /**
+     * Sets the value for 'retryConn' property
+     *
+     * @return retryConn
+     *         String value
+     */
+    String getRetryConn();
 
     /**
      * useFlexibleCallableStatements is temporarily removed. This is meant as a no-op.

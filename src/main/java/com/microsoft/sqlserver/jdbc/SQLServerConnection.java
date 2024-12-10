@@ -1064,6 +1064,53 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
         this.calcBigDecimalPrecision = calcBigDecimalPrecision;
     }
 
+    /**
+     * Retry exec
+     */
+    private String retryExec = SQLServerDriverStringProperty.RETRY_EXEC.getDefaultValue();
+
+    /**
+     * Returns the set of configurable statement retry rules set in retryExec
+     * 
+     * @return
+     *         A string containing statement retry rules.
+     */
+    public String getRetryExec() {
+        return retryExec;
+    }
+
+    /**
+     * Sets the list of configurable statement retry rules, for the given connection, in retryExec.
+     *
+     * @param retryExec
+     *        The list of retry rules to set, as a string.
+     */
+    public void setRetryExec(String retryExec) {
+        this.retryExec = retryExec;
+    }
+
+    private String retryConn = SQLServerDriverStringProperty.RETRY_CONN.getDefaultValue();
+
+    /**
+     * Returns the set of configurable connection retry rules set in retryConn
+     *
+     * @return
+     *         A string containing statement retry rules.
+     */
+    public String getRetryConn() {
+        return retryConn;
+    }
+
+    /**
+     * Sets the list of configurable connection retry rules, for the given connection, in retryConn.
+     *
+     * @param retryConn
+     *        The list of retry rules to set, as a string.
+     */
+    public void setRetryConn(String retryConn) {
+        this.retryConn = retryConn;
+    }
+
     /** Session Recovery Object */
     private transient IdleConnectionResiliency sessionRecovery = new IdleConnectionResiliency(this);
 
@@ -1761,10 +1808,22 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
      */
     private List<ReconnectListener> reconnectListeners = new ArrayList<>();
 
+    /**
+     * Register before reconnect listener
+     * 
+     * @param reconnectListener
+     *        reconnect listener
+     */
     public void registerBeforeReconnectListener(ReconnectListener reconnectListener) {
         reconnectListeners.add(reconnectListener);
     }
 
+    /**
+     * Remove before reconnect listener
+     * 
+     * @param reconnectListener
+     *        reconnect listener
+     */
     public void removeBeforeReconnectListener(ReconnectListener reconnectListener) {
         reconnectListeners.remove(reconnectListener);
     }
@@ -1994,7 +2053,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     if (0 == connectRetryCount) {
                         // connection retry disabled
                         throw e;
-                    } else if (connectRetryAttempt++ > connectRetryCount) {
+                    } else if (connectRetryAttempt++ >= connectRetryCount) {
                         // maximum connection retry count reached
                         if (connectionlogger.isLoggable(Level.FINE)) {
                             connectionlogger.fine("Connection failed. Maximum connection retry count "
@@ -2002,10 +2061,23 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                         }
                         throw e;
                     } else {
-                        // only retry if transient error
+                        // Only retry if matches configured CRL rules, or transient error (if CRL is not in use)
                         SQLServerError sqlServerError = e.getSQLServerError();
-                        if (!TransientError.isTransientError(sqlServerError)) {
+                        if (null == sqlServerError) {
                             throw e;
+                        } else {
+                            ConfigurableRetryRule rule = ConfigurableRetryLogic.getInstance()
+                                    .searchRuleSet(sqlServerError.getErrorNumber(), "connection");
+
+                            if (null == rule) {
+                                if (ConfigurableRetryLogic.getInstance().getReplaceFlag()) {
+                                    throw e;
+                                } else {
+                                    if (!TransientError.isTransientError(sqlServerError)) {
+                                        throw e;
+                                    }
+                                }
+                            }
                         }
 
                         // check if there's time to retry, no point to wait if no time left
@@ -2027,7 +2099,10 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                                     + connectRetryInterval + ")s before retry.");
                         }
 
-                        sleepForInterval(TimeUnit.SECONDS.toMillis(connectRetryInterval));
+                        if (connectRetryAttempt > 1) {
+                            // We do not sleep for first retry; first retry is immediate
+                            sleepForInterval(TimeUnit.SECONDS.toMillis(connectRetryInterval));
+                        }
                     }
                 }
             }
@@ -2337,6 +2412,24 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                     activeConnectionProperties.setProperty(sPropKey,
                             IPAddressPreference.valueOfString(sPropValue).toString());
                 }
+
+                sPropKey = SQLServerDriverStringProperty.RETRY_EXEC.toString();
+                sPropValue = activeConnectionProperties.getProperty(sPropKey);
+                if (null == sPropValue) {
+                    sPropValue = SQLServerDriverStringProperty.RETRY_EXEC.getDefaultValue();
+                    activeConnectionProperties.setProperty(sPropKey, sPropValue);
+                }
+                retryExec = sPropValue;
+                ConfigurableRetryLogic.getInstance().setStatementRulesFromConnectionString(sPropValue);
+
+                sPropKey = SQLServerDriverStringProperty.RETRY_CONN.toString();
+                sPropValue = activeConnectionProperties.getProperty(sPropKey);
+                if (null == sPropValue) {
+                    sPropValue = SQLServerDriverStringProperty.RETRY_CONN.getDefaultValue();
+                    activeConnectionProperties.setProperty(sPropKey, sPropValue);
+                }
+                retryConn = sPropValue;
+                ConfigurableRetryLogic.getInstance().setConnectionRulesFromConnectionString(sPropValue);
 
                 sPropKey = SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION.toString();
                 sPropValue = activeConnectionProperties.getProperty(sPropKey);
@@ -2709,13 +2802,6 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                         && !activeConnectionProperties
                                 .getProperty(SQLServerDriverStringProperty.ACCESS_TOKEN_CALLBACK_CLASS.toString())
                                 .isEmpty();
-                if ((null != accessTokenCallback || hasAccessTokenCallbackClass) && (!activeConnectionProperties
-                        .getProperty(SQLServerDriverStringProperty.USER.toString()).isEmpty()
-                        || !activeConnectionProperties.getProperty(SQLServerDriverStringProperty.PASSWORD.toString())
-                                .isEmpty())) {
-                    throw new SQLServerException(
-                            SQLServerException.getErrString("R_AccessTokenCallbackWithUserPassword"), null);
-                }
 
                 sPropKey = SQLServerDriverStringProperty.ACCESS_TOKEN_CALLBACK_CLASS.toString();
                 sPropValue = activeConnectionProperties.getProperty(sPropKey);
@@ -7505,7 +7591,7 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
     }
 
     /** request started flag */
-    private boolean requestStarted = false;
+    private volatile boolean requestStarted = false;
 
     /** original database autocommit mode */
     private boolean originalDatabaseAutoCommitMode;
@@ -7647,9 +7733,13 @@ public class SQLServerConnection implements ISQLServerConnection, java.io.Serial
                 sqlWarnings = originalSqlWarnings;
                 if (null != openStatements) {
                     while (!openStatements.isEmpty()) {
-                        try (Statement st = openStatements.get(0)) {}
+                        Statement st = openStatements.get(0);
+                        try {
+                            st.close();
+                        } finally {
+                            removeOpenStatement((SQLServerStatement) st);
+                        }
                     }
-                    openStatements.clear();
                 }
                 requestStarted = false;
             }

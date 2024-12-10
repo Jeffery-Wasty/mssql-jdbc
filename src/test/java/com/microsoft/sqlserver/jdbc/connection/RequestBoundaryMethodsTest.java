@@ -521,6 +521,10 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         verifiedMethodNames.add("setCalcBigDecimalPrecision");
         verifiedMethodNames.add("registerBeforeReconnectListener");
         verifiedMethodNames.add("removeBeforeReconnectListener");
+        verifiedMethodNames.add("getRetryExec");
+        verifiedMethodNames.add("setRetryExec");
+        verifiedMethodNames.add("getRetryConn");
+        verifiedMethodNames.add("setRetryConn");
         verifiedMethodNames.add("getUseFlexibleCallableStatements");
         verifiedMethodNames.add("setUseFlexibleCallableStatements");
         return verifiedMethodNames;

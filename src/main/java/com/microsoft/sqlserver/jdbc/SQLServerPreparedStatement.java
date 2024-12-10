@@ -132,8 +132,20 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
      * For caching data related to batch insert with bulkcopy
      */
     private SQLServerBulkCopy bcOperation = null;
+
+    /**
+     * Bulkcopy operation table name
+     */
     private String bcOperationTableName = null;
+
+    /**
+     * Bulkcopy operation column list
+     */
     private ArrayList<String> bcOperationColumnList = null;
+
+    /**
+     * Bulkcopy operation value list
+     */
     private ArrayList<String> bcOperationValueList = null;
 
     /** Returns the prepared statement SQL */
@@ -450,13 +462,13 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             return "";
 
         // Output looks like @P0 timestamp, @P1 varchar
-        int stringLen = nCols * 2;                  // @P
-        stringLen += nCols;                         // spaces
-        stringLen += nCols -1;                      // commas
+        int stringLen = nCols * 2; // @P
+        stringLen += nCols; // spaces
+        stringLen += nCols - 1; // commas
         if (nCols > 10)
-            stringLen += 10 + ((nCols - 10) * 2);   // @P{0-99}  Numbers after p
+            stringLen += 10 + ((nCols - 10) * 2); // @P{0-99} Numbers after p
         else
-            stringLen += nCols;                     // @P{0-9}   Numbers after p less than 10
+            stringLen += nCols; // @P{0-9} Numbers after p less than 10
 
         // Computing the type definitions up front, so we can get exact string lengths needed for the string builder.
         String[] typeDefinitions = new String[nCols];
@@ -567,6 +579,7 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
             loggerExternal.finer(toString() + ACTIVITY_ID + ActivityCorrelator.getCurrent().toString());
         }
         checkClosed();
+        ConfigurableRetryLogic.getInstance().storeLastQuery(this.userSQL);
         connection.unprepareUnreferencedPreparedStatementHandles(false);
         executeStatement(new PrepStmtExecCmd(this, EXECUTE));
         loggerExternal.exiting(getClassNameLogging(), "execute", null != resultSet);
@@ -2357,7 +2370,8 @@ public class SQLServerPreparedStatement extends SQLServerStatement implements IS
                             if (rs.getColumnCount() != bcOperationValueList.size()) {
                                 MessageFormat form = new MessageFormat(
                                         SQLServerException.getErrString("R_colNotMatchTable"));
-                                Object[] msgArgs = {bcOperationColumnList!= null ? bcOperationColumnList.size() : 0, bcOperationValueList.size()};
+                                Object[] msgArgs = {bcOperationColumnList != null ? bcOperationColumnList.size() : 0,
+                                        bcOperationValueList.size()};
                                 throw new IllegalArgumentException(form.format(msgArgs));
                             }
                         }
